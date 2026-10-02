@@ -1,0 +1,20 @@
+<resources>
+    <string name="app_name">Тайны Риверстоуна</string>
+
+    <string name="menu_new_game">Новая игра</string>
+    <string name="menu_continue">Продолжить</string>
+    <string name="menu_settings">Настройки</string>
+    <string name="menu_exit">Выход из игры</string>
+
+    <string name="menu_new_game_confirm_title">Начать новую игру?</string>
+    <string name="menu_new_game_confirm_text">Текущий прогресс будет полностью сброшен. Это действие нельзя отменить.</string>
+    <string name="action_confirm">Начать</string>
+    <string name="action_cancel">Отмена</string>
+
+    <string name="scene_action_back_to_menu">Вернуться в меню</string>
+    <string name="scene_menu_inventory">Инвентарь</string>
+    <string name="scene_menu_journal">Журнал</string>
+    <string name="scene_menu_settings">Настройки</string>
+    <string name="scene_menu_content_description">Меню</string>
+    <string name="placeholder_illustration">Иллюстрация сцены</string>
+</resources>
