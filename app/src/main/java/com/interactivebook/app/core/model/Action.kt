@@ -39,6 +39,10 @@ data class ActionConfirmation(
  * нажать на него нельзя; рядом показывается эта подпись (например "нужно подумать, что
  * сделать ещё"). Отличается от отсутствия в списке действий: игрок видит, что вариант
  * существует, но пока недоступен, а не то, что он его никогда не увидит.
+ *
+ * hideCostHint — если true, на кнопке не показывается автоподсказка стоимости (см.
+ * GameViewModel.costHintFor). По умолчанию false: если у действия есть отрицательный
+ * ChangeResource, игрок увидит пометку вида "(–2 Золото)" рядом с текстом кнопки.
  */
 data class Action(
     val id: String,
@@ -52,5 +56,6 @@ data class Action(
     val onCriticalFailure: List<Effect>? = null,
     val requiresCharacterCreation: Boolean = false,
     val confirmation: ActionConfirmation? = null,
-    val disabledReason: String? = null
+    val disabledReason: String? = null,
+    val hideCostHint: Boolean = false
 )

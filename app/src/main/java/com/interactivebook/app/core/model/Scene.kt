@@ -33,5 +33,9 @@ data class Scene(
     val text: String,
     val textVariants: List<TextVariant> = emptyList(),
     val actions: List<Action> = emptyList(),
-    val partTitle: PartTitle? = null
+    val partTitle: PartTitle? = null,
+    // Имя говорящего (например "Страж Руперт"). Показывается маленькой плашкой над
+    // пергаментной панелью текста. Заполняется автором только там, где это диалог с
+    // конкретным собеседником — движок не пытается угадать, диалог это или нет (раздел 84).
+    val speakerName: String? = null
 )

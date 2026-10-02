@@ -58,8 +58,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
-        // Пока сохранение/настройки не загружены с диска, значения по умолчанию временно
-        // видны в UI — это нормально, загрузка почти мгновенная, экран перерисуется сам.
         viewModelScope.launch {
             gameState = SaveRepository.load(getApplication())
         }
@@ -90,12 +88,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         updateState(newState)
     }
 
-    /**
-     * Завершение экрана создания персонажа: заменяет Character в GameState (остальной прогресс —
-     * инвентарь/журнал/флаги/ресурсы — не затрагивается) и сразу применяет effects действия,
-     * которое открыло создание персонажа (обычно — Transition к следующей сцене).
-     * Используется и для первого выбора класса после пролога, и для смены героя в начале главы.
-     */
     fun setCharacterAndApplyEffects(character: Character, effects: List<Effect>) {
         val state = gameState ?: return
         updateState(engine.applyEffects(state.copy(character = character), effects))
@@ -118,39 +110,78 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     /** Действие осмотра предмета (если для него есть examine-контент — см. DemoContent). */
     fun examineAction(item: Item): Action? = DemoContent.itemExamineActions[item.id]
 
-    /** Действия, доступные при текущем GameState (раздел 29 — Conditions решают доступность). */
+    /**
+     * Действия, доступные при текущем GameState (раздел 29 — Conditions решают доступность).
+     *
+     * Порядок: сначала "новые" (те, что появились в этой сцене после прошлого визита —
+     * см. newlyAvailableActionIds), затем остальные в авторском порядке. Стабильная сортировка,
+     * чтобы авторский порядок внутри групп сохранялся.
+     */
     fun visibleActions(scene: Scene): List<Action> {
         val state = gameState ?: return emptyList()
-        return scene.actions.filter { ConditionEvaluator.isMet(it.condition, state) }
+        val visible = scene.actions.filter { ConditionEvaluator.isMet(it.condition, state) }
+        val newIds = newlyAvailableActionIds(scene)
+        if (newIds.isEmpty()) return visible
+        return visible.sortedByDescending { it.id in newIds }
     }
 
     /**
      * ID действий, которые появились ПОСЛЕ прошлого визита в эту сцену — то есть условие
-     * стало выполняться из-за изменения GameState (флаг, информация, ресурс и т.п.) уже после
-     * того, как игрок впервые видел эту сцену.
+     * стало выполняться из-за изменения GameState уже после того, как игрок впервые видел сцену.
      *
-     * ВАЖНО: при первом визите в сцену ничего не считается "новым" — подсвечивать нечего,
-     * это и есть первый набор действий. seenActionsByScene не содержит ключа scene.id ровно
-     * до первого вызова markActionsSeen, поэтому наличие ключа — это и есть признак "был здесь
-     * раньше".
+     * ВАЖНО: при первом визите в сцену ничего не считается "новым" — подсвечивать нечего.
+     * seenActionsByScene не содержит ключа scene.id ровно до первого вызова markActionsSeen.
      */
     fun newlyAvailableActionIds(scene: Scene): Set<String> {
         val state = gameState ?: return emptySet()
         val visitedBefore = state.seenActionsByScene.containsKey(scene.id)
         if (!visitedBefore) return emptySet()
-        val visibleIds = visibleActions(scene).map { it.id }.toSet()
+        val visibleIds = scene.actions
+            .filter { ConditionEvaluator.isMet(it.condition, state) }
+            .map { it.id }
+            .toSet()
         val alreadySeen = state.seenActionsByScene[scene.id] ?: emptySet()
         return visibleIds - alreadySeen
     }
 
     /**
+     * ID действий, которые игрок уже РЕАЛЬНО НАЖИМАЛ в этой сцене. Используется UI, чтобы
+     * помечать пройденные действия (галочка + приглушение).
+     */
+    fun usedActionIds(scene: Scene): Set<String> {
+        val state = gameState ?: return emptySet()
+        return state.usedActionsByScene[scene.id] ?: emptySet()
+    }
+
+    /**
+     * Автоподсказка стоимости на кнопке действия. Смотрим эффекты и, если среди них есть
+     * ChangeResource с отрицательной дельтой, возвращаем готовую строку вида "(–2 Золото)".
+     * Если действие помечено hideCostHint = true, подсказка не показывается.
+     * Положительные ChangeResource, AddItem, RemoveItem намеренно не показываем
+     * (не спойлерим награды и потери предметов).
+     */
+    fun costHintFor(action: Action): String? {
+        if (action.hideCostHint) return null
+        val losses = action.effects.filterIsInstance<Effect.ChangeResource>()
+            .filter { it.delta < 0 }
+        if (losses.isEmpty()) return null
+        return losses.joinToString(", ") { effect ->
+            val label = effect.name.ifBlank { effect.resourceId }
+            "(–${-effect.delta} $label)"
+        }
+    }
+
+    /**
      * Запоминает текущий набор видимых действий сцены как "уже виденный" — вызывается при
      * каждом входе в сцену, ПОСЛЕ того, как newlyAvailableActionIds уже сохранил список для
-     * подсветки в этом визите (иначе подсветка гасла бы мгновенно).
+     * подсветки в этом визите.
      */
     fun markActionsSeen(scene: Scene) {
         val state = gameState ?: return
-        val visibleIds = visibleActions(scene).map { it.id }.toSet()
+        val visibleIds = scene.actions
+            .filter { ConditionEvaluator.isMet(it.condition, state) }
+            .map { it.id }
+            .toSet()
         val alreadySeen = state.seenActionsByScene[scene.id]
         if (alreadySeen == null || !alreadySeen.containsAll(visibleIds)) {
             val updated = state.seenActionsByScene + (scene.id to ((alreadySeen ?: emptySet()) + visibleIds))
@@ -158,11 +189,22 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Помечает конкретное действие как "уже нажатое" в текущей сцене. */
+    private fun markActionUsed(state: GameState, sceneId: String, actionId: String): GameState {
+        val current = state.usedActionsByScene[sceneId] ?: emptySet()
+        if (actionId in current) return state
+        return state.copy(
+            usedActionsByScene = state.usedActionsByScene + (sceneId to (current + actionId))
+        )
+    }
+
     /** Для действий без Check — effects применяются сразу. */
     fun performAction(action: Action) {
         if (action.check != null) return
         val state = gameState ?: return
-        updateState(engine.applyEffects(state, action.effects))
+        val sceneId = state.currentSceneId
+        val withUsed = markActionUsed(state, sceneId, action.id)
+        updateState(engine.applyEffects(withUsed, action.effects))
     }
 
     /**
@@ -178,7 +220,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     /** Применяет Effects нужной ветки результата после того, как UI показал исход. */
     fun applyCheckOutcome(action: Action, outcome: CheckOutcome) {
         val state = gameState ?: return
-        updateState(engine.applyCheckOutcome(action, outcome, state))
+        val sceneId = state.currentSceneId
+        val withUsed = markActionUsed(state, sceneId, action.id)
+        updateState(engine.applyCheckOutcome(action, outcome, withUsed))
     }
 
     /** Effects, которые применятся для данного исхода — не меняя состояние. Нужно UI (инвентарь),
