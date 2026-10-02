@@ -17,4 +17,16 @@
     <string name="scene_menu_settings">Настройки</string>
     <string name="scene_menu_content_description">Меню</string>
     <string name="placeholder_illustration">Иллюстрация сцены</string>
+
+    <!-- Новое для шапки навигации и подтверждения выхода -->
+    <string name="nav_home_content_description">Вернуться в главное меню</string>
+    <string name="nav_journal_content_description">Журнал</string>
+    <string name="nav_inventory_content_description">Инвентарь</string>
+    <string name="nav_settings_content_description">Настройки</string>
+    <string name="nav_resource_content_description">Ресурсы</string>
+
+    <string name="exit_to_menu_title">Вернуться в главное меню?</string>
+    <string name="exit_to_menu_message">Прогресс сохранён. Вы сможете продолжить игру с этого же места.</string>
+    <string name="exit_to_menu_confirm">Вернуться</string>
+    <string name="exit_to_menu_cancel">Остаться</string>
 </resources>

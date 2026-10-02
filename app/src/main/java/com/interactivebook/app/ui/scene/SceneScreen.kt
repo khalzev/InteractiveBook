@@ -2,35 +2,40 @@ package com.interactivebook.app.ui.scene
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.outlined.Backpack
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Paid
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,13 +53,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.interactivebook.app.R
@@ -65,17 +72,16 @@ import com.interactivebook.app.core.model.GameResource
 import com.interactivebook.app.core.model.Scene
 import com.interactivebook.app.core.settings.RevealSpeed
 import com.interactivebook.app.ui.check.CheckRollOverlay
-import kotlin.math.PI
-import kotlin.math.cos
 import kotlin.math.max
-import kotlin.math.sin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-// Тайминги для FAST — прежний темп по умолчанию; SLOW — вдвое медленнее (новый темп по
-// умолчанию, пункт 3 правок). INSTANT анимацию не использует вообще.
+// ---- Тайминги анимации появления сцены ----
+// FAST — прежний темп; SLOW — вдвое медленнее (новый темп по умолчанию);
+// INSTANT — анимации нет вообще, сцена появляется сразу целиком.
+
 private data class RevealTiming(
     val illustrationFadeMs: Int,
     val textBudgetMs: Long,
@@ -90,8 +96,23 @@ private const val PAUSE_AFTER_ILLUSTRATION_MS = 250L
 private const val PAUSE_AFTER_TEXT_MS = 250L
 private const val PAUSE_POLL_MS = 16L
 
+// Порог различения "тап" vs "удержание" (мс). Если игрок держал палец дольше — это удержание,
+// а не тап: пауза снимается, но текущий этап анимации НЕ завершается принудительно.
+private const val TAP_MAX_DURATION_MS = 250L
+
+// Пергаментная палитра панели текста. Не берём из темы, чтобы панель одинаково читалась
+// и в тёмной, и в светлой теме приложения.
+private val Parchment = Color(0xFFE8DBC0)
+private val ParchmentInk = Color(0xFF2B2118)
+private val ParchmentInkDim = Color(0xFF5A4A34)
+private val ParchmentBorder = Color(0xFF8A6A3E)
+
 private enum class RevealStage { ILLUSTRATION, TEXT, ACTIONS, DONE }
 
+/**
+ * Пауза, которую можно "заморозить": если isPaused() возвращает true — не тикаем,
+ * просто ждём. Удобно для удержания пальца на экране.
+ */
 private suspend fun pausableDelay(totalMs: Long, isPaused: () -> Boolean) {
     var remaining = totalMs
     while (remaining > 0) {
@@ -106,15 +127,14 @@ private suspend fun pausableDelay(totalMs: Long, isPaused: () -> Boolean) {
 }
 
 /**
- * Экран Scene — "страница книги" (раздел 79): иллюстрация сверху, текст, действия снизу.
+ * Экран Scene — "страница книги" (раздел 79): иллюстрация сверху, пергаментная панель с
+ * текстом, стек кнопок действий снизу.
  *
- * Появление идёт по этапам: иллюстрация → текст по буквам → кнопки по одной.
- * - Короткий тап по экрану мгновенно завершает ТЕКУЩИЙ этап (не всю анимацию разом) — доступно
- *   всегда, независимо от настройки скорости.
- * - Удержание пальца на экране ставит текущий этап на паузу, пока палец не отпустят.
- * - revealSpeed = INSTANT — анимации нет вообще, сцена появляется сразу целиком.
- * - revealedAlready — сцена уже была показана полностью (например, игрок вернулся из
- *   инвентаря): тогда она сразу отображается целиком, без повторной анимации.
+ * Шапка навигации: слева — "Домой" (с подтверждением), справа — Журнал, Инвентарь,
+ * Настройки и текущее значение ресурса "золото". Гамбургер-меню полностью убран.
+ *
+ * Тап по любому месту экрана завершает ТЕКУЩИЙ этап анимации. Удержание ставит этап на паузу
+ * до отпускания. Отпускание после удержания НЕ считается тапом (порог 250 мс).
  */
 @Composable
 fun SceneScreen(
@@ -122,6 +142,8 @@ fun SceneScreen(
     displayText: String,
     actions: List<Action>,
     newActionIds: Set<String>,
+    usedActionIds: Set<String>,
+    costHintFor: (Action) -> String?,
     resources: Map<String, GameResource>,
     revealedAlready: Boolean,
     revealSpeed: RevealSpeed,
@@ -135,12 +157,12 @@ fun SceneScreen(
     onOpenJournal: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
-    var menuExpanded by remember { mutableStateOf(false) }
     // Активная проверка: пока не null — показан CheckRollOverlay поверх экрана.
     var pendingCheck by remember { mutableStateOf<Pair<Action, CheckResolution>?>(null) }
-    // Действие, ожидающее подтверждения (Action.confirmation != null), и коллбэк, который
-    // нужно вызвать после подтверждения.
+    // Действие, ожидающее подтверждения (Action.confirmation != null).
     var pendingConfirmation by remember { mutableStateOf<Action?>(null) }
+    // Диалог подтверждения выхода в главное меню.
+    var showExitConfirm by remember { mutableStateOf(false) }
 
     fun dispatch(action: Action) {
         when {
@@ -225,46 +247,68 @@ fun SceneScreen(
         onRevealComplete()
     }
 
-    // Пока идёт бросок, сцена под оверлеем размывается (blur работает на Android 12+,
-    // на более старых версиях остаётся только затемнение оверлея).
+    // Пока идёт бросок, сцена под оверлеем размывается (blur работает на Android 12+).
     val blurRadius by animateDpAsState(
         targetValue = if (pendingCheck != null) 14.dp else 0.dp,
         animationSpec = tween(300),
         label = "sceneBlur"
     )
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            // Обработчик тапа / удержания по ВСЕМУ экрану: ставим в PointerEventPass.Initial,
+            // чтобы ловить касания везде, но НЕ поглощать их — тогда кнопки ниже продолжают
+            // работать как кнопки (иконки шапки, кнопки действий).
+            .pointerInput(scene.id, stage) {
+                if (stage == RevealStage.DONE) return@pointerInput
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                    val startTime = System.currentTimeMillis()
+                    isPaused = true
+                    // Ждём отпускания ИЛИ отмены (например, если палец уехал за экран).
+                    var released = false
+                    while (!released) {
+                        val event = awaitPointerEvent(pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                        val change = event.changes.firstOrNull { it.id == down.id }
+                        if (change == null || !change.pressed) {
+                            released = true
+                        }
+                    }
+                    val duration = System.currentTimeMillis() - startTime
+                    isPaused = false
+                    // Короткое касание = тап: завершаем текущий этап.
+                    if (duration < TAP_MAX_DURATION_MS) {
+                        when (stage) {
+                            RevealStage.ILLUSTRATION -> skipIllustration = true
+                            RevealStage.TEXT -> skipText = true
+                            RevealStage.ACTIONS -> skipActions = true
+                            RevealStage.DONE -> {}
+                        }
+                    }
+                }
+            }
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .blur(blurRadius)
-                .pointerInput(scene.id, stage) {
-                    if (stage == RevealStage.DONE) return@pointerInput
-                    detectTapGestures(
-                        onPress = {
-                            isPaused = true
-                            try {
-                                awaitRelease()
-                            } finally {
-                                isPaused = false
-                            }
-                        },
-                        onTap = {
-                            // Короткий тап завершает ТЕКУЩИЙ этап мгновенно — доступно всегда.
-                            when (stage) {
-                                RevealStage.ILLUSTRATION -> skipIllustration = true
-                                RevealStage.TEXT -> skipText = true
-                                RevealStage.ACTIONS -> skipActions = true
-                                RevealStage.DONE -> {}
-                            }
-                        }
-                    )
-                }
+                .windowInsetsPadding(WindowInsets.safeDrawing)
         ) {
 
             Column(modifier = Modifier.fillMaxSize()) {
 
-                // Иллюстрация сцены — плейсхолдер, пока изображения не подключены (раздел 81).
+                // ---- Шапка навигации ----
+                SceneTopBar(
+                    resources = resources,
+                    onHome = { showExitConfirm = true },
+                    onJournal = onOpenJournal,
+                    onInventory = onOpenInventory,
+                    onSettings = onOpenSettings
+                )
+
+                // ---- Иллюстрация сцены ----
+                // Пока реальные картинки не подключены (раздел 81) — плейсхолдер.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -280,123 +324,44 @@ fun SceneScreen(
                     )
                 }
 
+                // ---- Пергаментная панель с текстом ----
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 24.dp, vertical = 20.dp)
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
                 ) {
-                    // Весь текст сразу занимает своё место (невидимая часть — прозрачная),
-                    // поэтому строки не "прыгают" при переносе слов по мере набора.
-                    val shownChars = if (stage == RevealStage.DONE) displayText.length
-                    else revealedChars.coerceAtMost(displayText.length)
-                    val annotated = remember(displayText, shownChars) {
-                        buildAnnotatedString {
-                            append(displayText.substring(0, shownChars))
-                            withStyle(SpanStyle(color = Color.Transparent)) {
-                                append(displayText.substring(shownChars))
-                            }
-                        }
-                    }
-                    Text(text = annotated, style = MaterialTheme.typography.bodyLarge)
+                    ParchmentTextPanel(
+                        speakerName = scene.speakerName,
+                        displayText = displayText,
+                        revealedChars = revealedChars,
+                        stage = stage
+                    )
                 }
 
-                // Индикатор ресурсов (раздел 52-55) — виден постоянно, если у главы есть активные ресурсы.
-                if (resources.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surface)
-                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        resources.values.forEach { resource ->
-                            Text(
-                                text = "${resourceIcon(resource.id)} ${resource.currentValue}",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-
-                // Панель действий: ограниченная высота + скролл внутри неё — "невидимая рамка",
-                // за пределы которой кнопки не выходят, плюс отступ под системную панель навигации.
+                // ---- Стек кнопок действий ----
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = 280.dp)
+                        .heightIn(max = 320.dp)
                         .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                         .background(MaterialTheme.colorScheme.surface)
                         .navigationBarsPadding()
                         .verticalScroll(rememberScrollState())
-                        .padding(16.dp),
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     actions.forEachIndexed { index, action ->
-                        // Кнопки проявляются по одной; место под них зарезервировано заранее,
-                        // поэтому раскладка не прыгает. Пока кнопка не появилась — она неактивна.
                         val visible = stage == RevealStage.DONE || index < shownActions
                         ActionButton(
                             action = action,
                             visible = visible,
                             isNew = action.id in newActionIds,
+                            used = action.id in usedActionIds,
+                            costHint = costHintFor(action),
                             onClick = { onActionClicked(action) }
                         )
                     }
-                }
-            }
-
-            // Кнопка меню в правом верхнем углу, с тёмной подложкой для читаемости на любом фоне.
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(12.dp)
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.35f))
-            ) {
-                IconButton(onClick = { menuExpanded = true }) {
-                    Icon(
-                        imageVector = Icons.Default.Menu,
-                        contentDescription = stringResource(R.string.scene_menu_content_description),
-                        tint = Color.White
-                    )
-                }
-                DropdownMenu(
-                    expanded = menuExpanded,
-                    onDismissRequest = { menuExpanded = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.scene_menu_inventory)) },
-                        onClick = {
-                            menuExpanded = false
-                            onOpenInventory()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.scene_menu_journal)) },
-                        onClick = {
-                            menuExpanded = false
-                            onOpenJournal()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.scene_menu_settings)) },
-                        onClick = {
-                            menuExpanded = false
-                            onOpenSettings()
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.scene_action_back_to_menu)) },
-                        onClick = {
-                            menuExpanded = false
-                            onOpenMainMenu()
-                        }
-                    )
                 }
             }
         }
@@ -433,117 +398,223 @@ fun SceneScreen(
             }
         )
     }
+
+    if (showExitConfirm) {
+        AlertDialog(
+            onDismissRequest = { showExitConfirm = false },
+            title = { Text(stringResource(R.string.exit_to_menu_title)) },
+            text = { Text(stringResource(R.string.exit_to_menu_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showExitConfirm = false
+                    onOpenMainMenu()
+                }) {
+                    Text(stringResource(R.string.exit_to_menu_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitConfirm = false }) {
+                    Text(stringResource(R.string.exit_to_menu_cancel))
+                }
+            }
+        )
+    }
 }
 
-private fun resourceIcon(resourceId: String): String = when (resourceId) {
-    "gold" -> "🪙"
-    "time" -> "⏳"
-    else -> "◆"
-}
-
-// Временный нейтральный цвет для отметки новых действий — жёлтые звёзды было плохо видно на
-// светлых кнопках. Сменить, когда появится общий визуальный стиль приложения.
-private val NewActionMarkColor = Color(0xFF6B6259)
-private const val SPARK_COUNT = 6
-private const val SPARK_DURATION_MS = 650
+// ---------------------------------------------------------------------------------------------
+// Шапка навигации и пергаментная панель
+// ---------------------------------------------------------------------------------------------
 
 /**
- * Кнопка действия. Если isNew == true (действие появилось после того, как игрок уже был
- * в этой сцене — см. GameViewModel.newlyAvailableActionIds), в момент появления кнопки по ней
- * один раз пробегают короткие искры, а рядом с текстом остаётся маленький кружок — он держится,
- * пока игрок не нажмёт именно эту кнопку (после нажатия сцена обычно меняется, и кружок вместе
- * с ней).
+ * Верхняя шапка сцены: слева одна иконка "Домой", справа группа — ресурс (золото),
+ * Журнал, Инвентарь, Настройки. Гамбургер-меню полностью убран.
+ *
+ * Иконки в Material Outlined — временно, до появления кастомной векторной графики.
+ * Каждая — в полупрозрачном тёмном круге, чтобы читалась на любой иллюстрации.
  */
 @Composable
-private fun ActionButton(
-    action: Action,
-    visible: Boolean,
-    isNew: Boolean,
-    onClick: () -> Unit
+private fun SceneTopBar(
+    resources: Map<String, GameResource>,
+    onHome: () -> Unit,
+    onJournal: () -> Unit,
+    onInventory: () -> Unit,
+    onSettings: () -> Unit
 ) {
-    val contentDisabled = action.disabledReason != null
-    val actionAlpha by animateFloatAsState(
-        targetValue = if (visible) 1f else 0f,
-        animationSpec = tween(350),
-        label = "actionAlpha"
-    )
-
-    // По одному Animatable на искру — тот же надёжный механизм, что и в CheckRollOverlay:
-    // чтение .value в Canvas гарантированно вызывает перерисовку.
-    val sparkProgress = remember(action.id) { List(SPARK_COUNT) { Animatable(0f) } }
-    var sparksPlayed by remember(action.id) { mutableStateOf(false) }
-
-    LaunchedEffect(visible, isNew, contentDisabled) {
-        if (visible && isNew && !contentDisabled && !sparksPlayed) {
-            sparksPlayed = true
-            coroutineScope {
-                sparkProgress.forEach { anim ->
-                    launch { anim.animateTo(1f, tween(SPARK_DURATION_MS)) }
-                }
-            }
-        }
-    }
-
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer { alpha = actionAlpha }
+            .padding(horizontal = 8.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Button(
-                onClick = onClick,
-                enabled = visible && !contentDisabled,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(action.text, modifier = Modifier.weight(1f, fill = false))
-                    if (isNew && !contentDisabled) {
-                        Box(
-                            modifier = Modifier
-                                .padding(start = 8.dp)
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(NewActionMarkColor)
-                        )
-                    }
-                }
-            }
+        NavIconButton(
+            icon = { Icon(Icons.Outlined.Home, contentDescription = stringResource(R.string.nav_home_content_description), tint = Color.White) },
+            onClick = onHome
+        )
 
-            // Искры рисуются поверх кнопки — Canvas должен лежать внутри Box,
-            // только там доступен matchParentSize().
-            if (isNew && sparksPlayed) {
-                Canvas(modifier = Modifier.matchParentSize()) {
-                    val cx = size.width - 20f
-                    val cy = size.height / 2f
-                    sparkProgress.forEachIndexed { index, anim ->
-                        val p = anim.value
-                        if (p <= 0f || p >= 1f) return@forEachIndexed
-                        val angle = (index / SPARK_COUNT.toFloat()) * 2f * PI.toFloat()
-                        val eased = 1f - (1f - p) * (1f - p)
-                        val distance = 22f * eased
-                        val x = cx + cos(angle) * distance
-                        val y = cy + sin(angle) * distance
-                        drawCircle(
-                            color = NewActionMarkColor.copy(alpha = 1f - p),
-                            radius = 3f,
-                            center = Offset(x, y)
-                        )
-                    }
-                }
+        Spacer(Modifier.weight(1f))
+
+        // Ресурс "золото" — если он есть в состоянии, показываем иконку и число.
+        val gold = resources["gold"]
+        if (gold != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .padding(end = 4.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color.Black.copy(alpha = 0.35f))
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Paid,
+                    contentDescription = stringResource(R.string.nav_resource_content_description),
+                    tint = Color(0xFFE8C766),
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.size(6.dp))
+                Text(
+                    text = gold.currentValue.toString(),
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelLarge
+                )
             }
         }
 
-        if (contentDisabled) {
-            Text(
-                text = action.disabledReason.orEmpty(),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 4.dp, top = 2.dp)
-            )
+        NavIconButton(
+            icon = { Icon(Icons.Outlined.Paid, contentDescription = stringResource(R.string.nav_journal_content_description), tint = Color.White) },
+            onClick = onJournal
+        )
+        NavIconButton(
+            icon = { Icon(Icons.Outlined.Backpack, contentDescription = stringResource(R.string.nav_inventory_content_description), tint = Color.White) },
+            onClick = onInventory
+        )
+        NavIconButton(
+            icon = { Icon(Icons.Outlined.Tune, contentDescription = stringResource(R.string.nav_settings_content_description), tint = Color.White) },
+            onClick = onSettings
+        )
+    }
+}
+
+/**
+ * Круглая кнопка-иконка в шапке: полупрозрачный тёмный круг, чтобы иконка
+ * читалась на любой иллюстрации. Без Material-ripple — только лёгкая полупрозрачность.
+ */
+@Composable
+private fun NavIconButton(
+    icon: @Composable () -> Unit,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.35f))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        icon()
+    }
+}
+
+/**
+ * Пергаментная панель текста. Сверху (если задан speakerName) — тёмная плашка с именем
+ * говорящего. Внутри — текст, который "печатается" по мере reveal: видимая часть — обычным
+ * цветом, ещё не появившаяся — прозрачным (чтобы строки не прыгали). Пока текст длиннее
+ * видимой области — внизу мягкий градиент и "дышащий" шеврон вниз.
+ */
+@Composable
+private fun ParchmentTextPanel(
+    speakerName: String?,
+    displayText: String,
+    revealedChars: Int,
+    stage: RevealStage
+) {
+    val scrollState = rememberScrollState()
+    // Показывать подсказку о скрытом тексте, если до низа ещё есть куда скроллить.
+    val showScrollHint = scrollState.canScrollForward
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+
+        // Плашка спикера — над пергаментом, слева, слегка "выступает".
+        if (!speakerName.isNullOrBlank()) {
+            Box(
+                modifier = Modifier
+                    .padding(start = 4.dp)
+                    .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
+                    .background(ParchmentInk)
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text(
+                    text = speakerName,
+                    color = Parchment,
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(6.dp))
+                .background(Parchment)
+                .padding(1.5.dp)
+                .background(Parchment)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Parchment)
+                    .padding(horizontal = 2.dp, vertical = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(scrollState)
+                        .padding(horizontal = 18.dp, vertical = 16.dp)
+                ) {
+                    val shown = if (stage == RevealStage.DONE) displayText.length
+                    else revealedChars.coerceAtMost(displayText.length)
+                    val annotated = remember(displayText, shown) {
+                        buildAnnotatedString {
+                            append(displayText.substring(0, shown))
+                            withStyle(SpanStyle(color = Color.Transparent)) {
+                                append(displayText.substring(shown))
+                            }
+                        }
+                    }
+                    Text(
+                        text = annotated,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = ParchmentInk
+                    )
+                }
+
+                // Градиент у нижнего края + шеврон — только если текст ещё есть куда скроллить.
+                if (showScrollHint) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(56.dp)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Parchment.copy(alpha = 0.95f)
+                                    )
+                                )
+                            )
+                    )
+                    Icon(
+                        imageVector = Icons.Outlined.ExpandMore,
+                        contentDescription = null,
+                        tint = ParchmentInkDim,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 4.dp)
+                            .size(28.dp)
+                    )
+                }
+            }
         }
     }
 }

@@ -44,8 +44,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Edge-to-edge: иллюстрация сцены может уходить под статус-бар (раздел 80 — погружение),
-        // при этом интерактивные элементы сами добавляют себе нужные отступы (statusBarsPadding /
-        // navigationBarsPadding / safeDrawingPadding) в соответствующих экранах.
+        // при этом интерактивные элементы сами добавляют себе нужные отступы в SceneScreen.
         enableEdgeToEdge()
         setContent {
             InteractiveBookTheme {
@@ -110,15 +109,16 @@ private fun InteractiveBookApp() {
 
         composable(ROUTE_SCENE) {
             val scene = viewModel.currentScene() ?: DemoContent.startingScene
-            // Если у сцены задан partTitle (пункт 3) — сначала показываем заголовок части
-            // ("Часть I" → название → "Пролог") с тапом для продолжения, и только потом саму
-            // сцену. remember(scene.id) сбрасывает флаг при переходе на новую сцену с partTitle.
+            // Если у сцены задан partTitle — сначала показываем заголовок части
+            // ("Часть I" → название → "Пролог") с тапом для продолжения, и только потом саму сцену.
             var showingPartTitle by rememberSaveable(scene.id) { mutableStateOf(scene.partTitle != null) }
 
             // "Новые" действия — те, что появились в этой сцене после её прошлого посещения
             // (условие стало выполняться). Вычисляем один раз при входе (remember), чтобы список
             // не "схлопывался" на середине анимации из-за отметки об увиденном.
             val newActionIds = remember(scene.id) { viewModel.newlyAvailableActionIds(scene) }
+            val usedActionIds = viewModel.usedActionIds(scene)
+
             LaunchedEffect(scene.id) {
                 viewModel.markActionsSeen(scene)
             }
@@ -134,6 +134,8 @@ private fun InteractiveBookApp() {
                     displayText = viewModel.resolveSceneText(scene),
                     actions = viewModel.visibleActions(scene),
                     newActionIds = newActionIds,
+                    usedActionIds = usedActionIds,
+                    costHintFor = { action -> viewModel.costHintFor(action) },
                     resources = viewModel.gameState?.resources ?: emptyMap(),
                     revealedAlready = viewModel.isSceneRevealed(scene.id),
                     revealSpeed = viewModel.revealSpeed,
