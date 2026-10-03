@@ -113,16 +113,24 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * Действия, доступные при текущем GameState (раздел 29 — Conditions решают доступность).
      *
-     * Порядок: сначала "новые" (те, что появились в этой сцене после прошлого визита —
-     * см. newlyAvailableActionIds), затем остальные в авторском порядке. Стабильная сортировка,
-     * чтобы авторский порядок внутри групп сохранялся.
+     * Порядок (трёхступенчатая сортировка, стабильная — авторский порядок внутри группы
+     * сохраняется):
+     *   1. Новые — те, что появились в этой сцене после прошлого визита.
+     *   2. Непройденные — те, что игрок видел, но не нажимал.
+     *   3. Пройденные — те, что уже нажимал. Они уезжают вниз и визуально приглушаются.
      */
     fun visibleActions(scene: Scene): List<Action> {
         val state = gameState ?: return emptyList()
         val visible = scene.actions.filter { ConditionEvaluator.isMet(it.condition, state) }
         val newIds = newlyAvailableActionIds(scene)
-        if (newIds.isEmpty()) return visible
-        return visible.sortedByDescending { it.id in newIds }
+        val usedIds = state.usedActionsByScene[scene.id] ?: emptySet()
+        return visible.sortedBy { action ->
+            when {
+                action.id in newIds -> 0
+                action.id in usedIds -> 2
+                else -> 1
+            }
+        }
     }
 
     /**
@@ -157,8 +165,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
      * Автоподсказка стоимости на кнопке действия. Смотрим эффекты и, если среди них есть
      * ChangeResource с отрицательной дельтой, возвращаем готовую строку вида "(–2 Золото)".
      * Если действие помечено hideCostHint = true, подсказка не показывается.
-     * Положительные ChangeResource, AddItem, RemoveItem намеренно не показываем
-     * (не спойлерим награды и потери предметов).
      */
     fun costHintFor(action: Action): String? {
         if (action.hideCostHint) return null
