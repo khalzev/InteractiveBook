@@ -1,8 +1,9 @@
 package com.interactivebook.app.ui.settings
 
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,107 +12,165 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.interactivebook.app.R
 import com.interactivebook.app.core.settings.RevealSpeed
+import com.interactivebook.app.ui.common.AssetImage
+
+private val InkColor = Color(0xFF3B2A1A)
+private val InkDimColor = Color(0xFF6B5A44)
 
 /**
- * Настройки. Пока одна функция: скорость появления сцены — мгновенно / быстро / медленно
- * (пункт 3 правок). Независимо от выбора (кроме "мгновенно" — там скипать нечего), тап по
- * экрану во время сцены всегда может ускорить текущий этап анимации — это не настройка,
- * а всегда доступная подсказка для нетерпеливых игроков.
+ * Настройки — страница книги с текстом поверх.
+ *
+ * Настройки:
+ *  - Скорость появления сцены (INSTANT / FAST / SLOW).
+ *  - Перелистывание страниц (Вкл / Выкл).
  */
 @Composable
 fun SettingsScreen(
     revealSpeed: RevealSpeed,
+    pageTurnEnabled: Boolean,
     onRevealSpeedChange: (RevealSpeed) -> Unit,
+    onPageTurnChange: (Boolean) -> Unit,
     onBack: () -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .safeDrawingPadding()
-            .padding(horizontal = 20.dp, vertical = 16.dp)
-    ) {
-        TextButton(onClick = onBack) { Text("← Назад") }
-        Text("Настройки", style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(20.dp))
+    Box(modifier = Modifier.fillMaxSize()) {
+        AssetImage(
+            fileName = "book_open.png",
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
 
-        Text("Скорость появления сцены", style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = "Изображение, текст и варианты действий могут появляться постепенно, как " +
-                "страница книги, или сразу целиком. Во время постепенного появления короткое " +
-                "нажатие на экран ускоряет текущий этап, а удержание — приостанавливает набор текста.",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(16.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .safeDrawingPadding()
+                .padding(start = 118.dp, end = 28.dp, top = 130.dp, bottom = 40.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            TextButton(onClick = onBack) {
+                Text(stringResource(R.string.back), color = InkDimColor)
+            }
 
-        RevealSpeedOption(
-            title = "Мгновенно",
-            description = "Сцена появляется сразу целиком, без анимации.",
-            selected = revealSpeed == RevealSpeed.INSTANT,
-            onSelect = { onRevealSpeedChange(RevealSpeed.INSTANT) }
-        )
-        Spacer(Modifier.height(10.dp))
-        RevealSpeedOption(
-            title = "Быстро",
-            description = "Постепенное появление в обычном темпе.",
-            selected = revealSpeed == RevealSpeed.FAST,
-            onSelect = { onRevealSpeedChange(RevealSpeed.FAST) }
-        )
-        Spacer(Modifier.height(10.dp))
-        RevealSpeedOption(
-            title = "Медленно",
-            description = "Постепенное появление вдвое медленнее — по умолчанию.",
-            selected = revealSpeed == RevealSpeed.SLOW,
-            onSelect = { onRevealSpeedChange(RevealSpeed.SLOW) }
-        )
+            Text(
+                text = stringResource(R.string.settings_title),
+                style = MaterialTheme.typography.headlineMedium,
+                color = InkColor
+            )
+            Spacer(Modifier.height(20.dp))
+
+            // --- Скорость появления сцены ---
+            Text(
+                text = stringResource(R.string.settings_reveal_speed_title),
+                style = MaterialTheme.typography.titleLarge,
+                color = InkColor
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.settings_reveal_speed_description),
+                style = MaterialTheme.typography.bodyLarge,
+                color = InkDimColor
+            )
+            Spacer(Modifier.height(10.dp))
+
+            RevealSpeedRow(
+                label = stringResource(R.string.settings_reveal_instant),
+                desc = stringResource(R.string.settings_reveal_instant_desc),
+                selected = revealSpeed == RevealSpeed.INSTANT,
+                onSelect = { onRevealSpeedChange(RevealSpeed.INSTANT) }
+            )
+            RevealSpeedRow(
+                label = stringResource(R.string.settings_reveal_fast),
+                desc = stringResource(R.string.settings_reveal_fast_desc),
+                selected = revealSpeed == RevealSpeed.FAST,
+                onSelect = { onRevealSpeedChange(RevealSpeed.FAST) }
+            )
+            RevealSpeedRow(
+                label = stringResource(R.string.settings_reveal_slow),
+                desc = stringResource(R.string.settings_reveal_slow_desc),
+                selected = revealSpeed == RevealSpeed.SLOW,
+                onSelect = { onRevealSpeedChange(RevealSpeed.SLOW) }
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            // --- Перелистывание страниц ---
+            Text(
+                text = stringResource(R.string.settings_page_turn_title),
+                style = MaterialTheme.typography.titleLarge,
+                color = InkColor
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.settings_page_turn_description),
+                style = MaterialTheme.typography.bodyLarge,
+                color = InkDimColor
+            )
+            Spacer(Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = if (pageTurnEnabled) {
+                        stringResource(R.string.settings_page_turn_on)
+                    } else {
+                        stringResource(R.string.settings_page_turn_off)
+                    },
+                    style = MaterialTheme.typography.titleLarge,
+                    color = InkColor
+                )
+                Switch(
+                    checked = pageTurnEnabled,
+                    onCheckedChange = onPageTurnChange
+                )
+            }
+
+            Spacer(Modifier.height(40.dp))
+        }
     }
 }
 
 @Composable
-private fun RevealSpeedOption(
-    title: String,
-    description: String,
+private fun RevealSpeedRow(
+    label: String,
+    desc: String,
     selected: Boolean,
     onSelect: () -> Unit
 ) {
-    Surface(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onSelect)
-            .border(
-                width = if (selected) 2.dp else 1.dp,
-                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                shape = RoundedCornerShape(14.dp)
-            ),
-        shape = RoundedCornerShape(14.dp),
-        color = if (selected) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onSelect
+            )
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            RadioButton(selected = selected, onClick = onSelect)
-            Column {
-                Text(title, style = MaterialTheme.typography.titleLarge)
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+        RadioButton(selected = selected, onClick = onSelect)
+        Column(modifier = Modifier.padding(start = 8.dp)) {
+            Text(label, style = MaterialTheme.typography.titleLarge, color = InkColor)
+            Text(desc, style = MaterialTheme.typography.bodyLarge, color = InkDimColor)
         }
     }
 }

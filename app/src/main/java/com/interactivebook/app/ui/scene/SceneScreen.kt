@@ -3,6 +3,7 @@ package com.interactivebook.app.ui.scene
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -12,17 +13,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -39,7 +38,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -48,6 +49,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.interactivebook.app.R
@@ -81,11 +83,11 @@ private const val PAUSE_AFTER_TEXT_MS = 250L
 private const val PAUSE_POLL_MS = 16L
 private const val TAP_MAX_DURATION_MS = 250L
 
-// Палитра интерфейса (для тех мест, где нет картинки — фолбэк-цвета).
-private val InkBackgroundFallback = Color(0xFF1C1712)
-private val ParchmentFallback = Color(0xFFE8DBC0)
-private val ParchmentInk = Color(0xFF2B2118)
-private val ParchmentInkDim = Color(0xFF5A4A34)
+// ---- Палитра ----
+// Цвета «чернил» текста на странице книги.
+private val InkColor = Color(0xFF3B2A1A)
+private val InkDimColor = Color(0xFF6B5A44)
+private val GoldColor = Color(0xFFB8925A)
 
 private enum class RevealStage { ILLUSTRATION, TEXT, ACTIONS, DONE }
 
@@ -103,21 +105,15 @@ private suspend fun pausableDelay(totalMs: Long, isPaused: () -> Boolean) {
 }
 
 /**
- * Экран Scene — "страница книги".
+ * Экран сцены — страница книги с закладками.
  *
- * Компоновка:
- *   ┌──────────────────────────────────┐
- *   │  ШАПКА (поверх иллюстрации)      │  ← иконки навигации + ресурс
- *   │                                  │
- *   │  ИЛЛЮСТРАЦИЯ (с рамкой)          │  ← ~35% высоты
- *   ├──────────────────────────────────┤
- *   │                                  │
- *   │  ПЕРГАМЕНТ (текст + кнопки)      │  ← ~65% высоты, внутренний скролл
- *   │                                  │
- *   └──────────────────────────────────┘
+ * Компоновка (сверху вниз, все три зоны внутри страницы):
+ *   1. Иллюстрация сцены с золотой рамкой — 25% высоты.
+ *   2. Текст сцены (с внутренним скроллом) — 50% высоты.
+ *   3. Список действий с ромбами (с внутренним скроллом) — 25% высоты.
  *
- * Тап по любому месту завершает текущий этап анимации.
- * Удержание ставит этап на паузу. Отпускание после удержания НЕ считается тапом (порог 250 мс).
+ * Закладки (bookmarks.png) — накладываются в правом верхнем углу, поверх страницы.
+ * Программно поверх иконок закладок — невидимые зоны нажатия.
  */
 @Composable
 fun SceneScreen(
@@ -142,7 +138,6 @@ fun SceneScreen(
 ) {
     var pendingCheck by remember { mutableStateOf<Pair<Action, CheckResolution>?>(null) }
     var pendingConfirmation by remember { mutableStateOf<Action?>(null) }
-    var showExitConfirm by remember { mutableStateOf(false) }
 
     fun dispatch(action: Action) {
         when {
@@ -166,19 +161,26 @@ fun SceneScreen(
     val wasRevealed = remember(scene.id) { revealedAlready || revealSpeed == RevealSpeed.INSTANT }
     val timing = if (revealSpeed == RevealSpeed.SLOW) SLOW_TIMING else FAST_TIMING
 
-    var stage by remember(scene.id) { mutableStateOf(if (wasRevealed) RevealStage.DONE else RevealStage.ILLUSTRATION) }
+    var stage by remember(scene.id) {
+        mutableStateOf(if (wasRevealed) RevealStage.DONE else RevealStage.ILLUSTRATION)
+    }
     var skipIllustration by remember(scene.id) { mutableStateOf(false) }
     var skipText by remember(scene.id) { mutableStateOf(false) }
     var skipActions by remember(scene.id) { mutableStateOf(false) }
     var isPaused by remember(scene.id) { mutableStateOf(false) }
 
     val illustrationAlpha = remember(scene.id) { Animatable(if (wasRevealed) 1f else 0f) }
-    var revealedChars by remember(scene.id) { mutableIntStateOf(if (wasRevealed) displayText.length else 0) }
-    var shownActions by remember(scene.id) { mutableIntStateOf(if (wasRevealed) actions.size else 0) }
+    var revealedChars by remember(scene.id) {
+        mutableIntStateOf(if (wasRevealed) displayText.length else 0)
+    }
+    var shownActions by remember(scene.id) {
+        mutableIntStateOf(if (wasRevealed) actions.size else 0)
+    }
 
     LaunchedEffect(scene.id, revealSpeed) {
         if (stage == RevealStage.DONE) return@LaunchedEffect
 
+        // Этап 1: иллюстрация.
         stage = RevealStage.ILLUSTRATION
         if (!skipIllustration) {
             coroutineScope {
@@ -194,6 +196,7 @@ fun SceneScreen(
         illustrationAlpha.snapTo(1f)
         delay(PAUSE_AFTER_ILLUSTRATION_MS)
 
+        // Этап 2: текст по буквам.
         stage = RevealStage.TEXT
         if (!skipText) {
             val total = displayText.length
@@ -209,6 +212,7 @@ fun SceneScreen(
         revealedChars = displayText.length
         delay(PAUSE_AFTER_TEXT_MS)
 
+        // Этап 3: действия по одному.
         stage = RevealStage.ACTIONS
         if (!skipActions) {
             var i = 0
@@ -223,8 +227,7 @@ fun SceneScreen(
         onRevealComplete()
     }
 
-    // Корневой Box: поверх него ловим тап/удержание по всему экрану,
-    // при этом кнопки ниже обрабатывают свои клики (мы не поглощаем события).
+    // Корневой Box — ловим тап и удержание по всему экрану.
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -255,188 +258,100 @@ fun SceneScreen(
                 }
             }
     ) {
-        // Фон экрана — картинка scene_background.png, растянутая на весь экран.
+        // ---- Фон: страница открытой книги ----
         AssetImage(
-            fileName = "scene_background.png",
+            fileName = "book_open.png",
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-            fallbackColor = InkBackgroundFallback
+            contentScale = ContentScale.Crop
         )
 
-        // Основная колонка: иллюстрация сверху, пергамент снизу.
+        // ---- Всё содержимое страницы, с отступами под разворот книги ----
+        // Левая страница книги (уходит за край) — декоративная, ничего не показываем.
+        // Правая страница — на ней весь контент. Отступы подобраны под пропорции
+        // страницы (примерно 55% ширины от левого края).
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(start = 118.dp, end = 28.dp, top = 130.dp, bottom = 40.dp)
         ) {
 
-            // ---- Иллюстрация (35% высоты) ----
+            // ---- Зона 1: иллюстрация (25%) ----
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(0.35f)
-                    .graphicsLayer { alpha = illustrationAlpha.value }
+                    .weight(0.25f)
+                    .graphicsLayer { alpha = illustrationAlpha.value },
+                contentAlignment = Alignment.Center
             ) {
-                // Рамка иллюстрации (16:9 по ширине). Внутри — место под картинку сцены.
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                        .align(Alignment.TopCenter)
-                ) {
-                    // Внутренняя область под картинку сцены — пока плейсхолдер.
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 24.dp, vertical = 20.dp)
-                            .background(Color(0xFF2B2118)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = stringResource(R.string.placeholder_illustration),
-                            color = Color(0xFFB5A27C),
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    }
-                    // Рамка поверх картинки.
-                    AssetImage(
-                        fileName = "illustration_frame.png",
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.FillBounds
-                    )
-                }
+                IllustrationWithFrame(stage)
             }
 
-            // ---- Пергамент с текстом и кнопками (65% высоты) ----
+            Spacer(Modifier.height(12.dp))
+
+            // ---- Зона 2: текст сцены (50%) ----
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(0.65f)
+                    .weight(0.50f)
                     .fillMaxSize()
             ) {
-                // Пергамент под текст.
-                AssetImage(
-                    fileName = "parchment_panel.png",
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.FillBounds,
-                    fallbackColor = ParchmentFallback
+                TextArea(
+                    displayText = displayText,
+                    revealedChars = revealedChars,
+                    stage = stage
                 )
+            }
 
-                // Содержимое пергамента: текст сверху + кнопки ниже. Всё вместе скроллится.
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 28.dp, vertical = 24.dp)
-                ) {
-                    // Плашка спикера (если задан speakerName) — над текстом.
-                    if (!scene.speakerName.isNullOrBlank()) {
-                        Text(
-                            text = scene.speakerName,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = ParchmentInkDim,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                    }
+            Spacer(Modifier.height(8.dp))
 
-                    // Текст сцены (эффект печатной машинки).
-                    val shown = if (stage == RevealStage.DONE) displayText.length
-                    else revealedChars.coerceAtMost(displayText.length)
-                    val annotated = remember(displayText, shown) {
-                        buildAnnotatedString {
-                            append(displayText.substring(0, shown))
-                            withStyle(SpanStyle(color = Color.Transparent)) {
-                                append(displayText.substring(shown))
-                            }
-                        }
-                    }
-                    Text(
-                        text = annotated,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = ParchmentInk
-                    )
+            // ---- Разделитель между текстом и действиями ----
+            OrnamentalDivider()
 
-                    Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(8.dp))
 
-                    // Кнопки действий — визуально часть пергамента.
-                    actions.forEachIndexed { index, action ->
-                        val visible = stage == RevealStage.DONE || index < shownActions
-                        ActionButton(
-                            action = action,
-                            visible = visible,
-                            isNew = action.id in newActionIds,
-                            used = action.id in usedActionIds,
-                            costHint = costHintFor(action),
-                            onClick = { onActionClicked(action) }
-                        )
-                        Spacer(Modifier.height(10.dp))
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-                }
+            // ---- Зона 3: действия (25%) ----
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(0.25f)
+                    .fillMaxSize()
+            ) {
+                ActionsList(
+                    actions = actions,
+                    shownActions = shownActions,
+                    stage = stage,
+                    isNew = { it.id in newActionIds },
+                    isUsed = { it.id in usedActionIds },
+                    costHintFor = costHintFor,
+                    onClick = { onActionClicked(it) }
+                )
             }
         }
 
-        // ---- Шапка навигации (поверх иллюстрации) ----
-        Row(
+        // ---- Закладки в правом верхнем углу (поверх страницы) ----
+        BookmarksRow(
             modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp)
-                .windowInsetsPadding(WindowInsets.safeDrawing),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            NavIconButton(
-                fileName = "icon_home.png",
-                contentDescription = stringResource(R.string.nav_home_content_description),
-                onClick = { showExitConfirm = true }
-            )
+                .align(Alignment.TopEnd)
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(top = 8.dp, end = 8.dp),
+            onInventory = onOpenInventory,
+            onJournal = onOpenJournal,
+            onSettings = onOpenSettings
+        )
 
-            Spacer(Modifier.weight(1f))
-
-            // Ресурс "золото".
-            val gold = resources["gold"]
-            if (gold != null) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(end = 6.dp)
-                ) {
-                    AssetImage(
-                        fileName = "icon_gold.png",
-                        contentDescription = null,
-                        modifier = Modifier.size(28.dp),
-                        contentScale = ContentScale.Fit
-                    )
-                    Spacer(Modifier.size(4.dp))
-                    Text(
-                        text = gold.currentValue.toString(),
-                        color = Color(0xFFE8DBC0),
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
-            }
-
-            NavIconButton(
-                fileName = "icon_journal.png",
-                contentDescription = stringResource(R.string.nav_journal_content_description),
-                onClick = onOpenJournal
-            )
-            NavIconButton(
-                fileName = "icon_inventory.png",
-                contentDescription = stringResource(R.string.nav_inventory_content_description),
-                onClick = onOpenInventory
-            )
-            NavIconButton(
-                fileName = "icon_settings.png",
-                contentDescription = stringResource(R.string.nav_settings_content_description),
-                onClick = onOpenSettings
-            )
-        }
+        // ---- Ресурсы (золото и т.д.) — под закладками справа ----
+        ResourcesRow(
+            resources = resources,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(top = 68.dp, end = 24.dp)
+        )
     }
 
+    // ---- Оверлей броска кубика ----
     pendingCheck?.let { (action, resolution) ->
         CheckRollOverlay(
             resolution = resolution,
@@ -447,6 +362,7 @@ fun SceneScreen(
         )
     }
 
+    // ---- Подтверждение действия (если задано) ----
     pendingConfirmation?.let { action ->
         val confirmation = action.confirmation ?: return@let
         AlertDialog(
@@ -468,53 +384,383 @@ fun SceneScreen(
             }
         )
     }
+}
 
-    if (showExitConfirm) {
-        AlertDialog(
-            onDismissRequest = { showExitConfirm = false },
-            title = { Text(stringResource(R.string.exit_to_menu_title)) },
-            text = { Text(stringResource(R.string.exit_to_menu_message)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showExitConfirm = false
-                    onOpenMainMenu()
-                }) {
-                    Text(stringResource(R.string.exit_to_menu_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showExitConfirm = false }) {
-                    Text(stringResource(R.string.exit_to_menu_cancel))
-                }
-            }
+// ---------------------------------------------------------------------------------------------
+// Компоненты страницы сцены
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Иллюстрация сцены с золотой рамкой, нарисованной программно (тонкие линии по периметру).
+ * Пока картинки нет — показывается плейсхолдер. Позже сюда подставится картинка по id сцены.
+ */
+@Composable
+private fun IllustrationWithFrame(stage: RevealStage) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        // Внутренняя зона — сюда позже ляжет картинка сцены.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(6.dp)
+                .background(Color(0xFF2B2118)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = stringResource(R.string.placeholder_illustration),
+                color = Color(0xFFB5A27C),
+                style = MaterialTheme.typography.labelLarge
+            )
+        }
+
+        // Рамка — тонкая золотая линия по периметру, рисуется поверх.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(2.dp)
+                .border(
+                    width = 1.dp,
+                    color = GoldColor.copy(alpha = 0.8f),
+                    shape = RoundedCornerShape(2.dp)
+                )
         )
     }
 }
 
 /**
- * Круглая кнопка-иконка для шапки навигации. Иконка — картинка из assets,
- * фон — полупрозрачный тёмный круг, чтобы читалась на любой иллюстрации.
+ * Текст сцены с постепенным проявлением (эффект печатной машинки).
+ * С внутренним скроллом и мягким градиентом у нижнего края, если есть скрытый текст.
  */
 @Composable
-private fun NavIconButton(
-    fileName: String,
-    contentDescription: String?,
-    onClick: () -> Unit
+private fun TextArea(
+    displayText: String,
+    revealedChars: Int,
+    stage: RevealStage
 ) {
-    Box(
+    val scrollState = rememberScrollState()
+    val showScrollHint = scrollState.canScrollForward
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(end = 6.dp)
+        ) {
+            val shown = if (stage == RevealStage.DONE) displayText.length
+            else revealedChars.coerceAtMost(displayText.length)
+            val annotated = remember(displayText, shown) {
+                buildAnnotatedString {
+                    append(displayText.substring(0, shown))
+                    withStyle(SpanStyle(color = Color.Transparent)) {
+                        append(displayText.substring(shown))
+                    }
+                }
+            }
+            Text(
+                text = annotated,
+                style = MaterialTheme.typography.bodyLarge,
+                color = InkColor
+            )
+        }
+
+        // Градиент затухания + стрелка вниз — если есть скрытый текст.
+        if (showScrollHint) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color(0xFFE8DBC0).copy(alpha = 0.95f)
+                            )
+                        )
+                    )
+            )
+            Text(
+                text = "⌄",
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 2.dp)
+                    .alpha(0.6f),
+                color = InkDimColor,
+                style = MaterialTheme.typography.headlineMedium
+            )
+        }
+    }
+}
+
+/**
+ * Декоративный разделитель между текстом и действиями — горизонтальная линия
+ * с ромбом посередине. Рисуется программно.
+ */
+@Composable
+private fun OrnamentalDivider() {
+    Row(
         modifier = Modifier
-            .size(48.dp)
-            .padding(4.dp)
-            .clip(CircleShape)
-            .background(Color.Black.copy(alpha = 0.35f))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        AssetImage(
-            fileName = fileName,
-            contentDescription = contentDescription,
-            modifier = Modifier.size(32.dp),
-            contentScale = ContentScale.Fit
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(1.dp)
+                .background(GoldColor.copy(alpha = 0.6f))
+        )
+        Text(
+            text = "◆",
+            color = GoldColor,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(horizontal = 10.dp)
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(1.dp)
+                .background(GoldColor.copy(alpha = 0.6f))
         )
     }
+}
+
+/**
+ * Список действий с ромбами-маркерами. С внутренним скроллом.
+ * Пройденные действия — приглушены, с галочкой. Новые — с лёгким выделением.
+ */
+@Composable
+private fun ActionsList(
+    actions: List<Action>,
+    shownActions: Int,
+    stage: RevealStage,
+    isNew: (Action) -> Boolean,
+    isUsed: (Action) -> Boolean,
+    costHintFor: (Action) -> String?,
+    onClick: (Action) -> Unit
+) {
+    val scrollState = rememberScrollState()
+    val showScrollHint = scrollState.canScrollForward
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(end = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            actions.forEachIndexed { index, action ->
+                val visible = stage == RevealStage.DONE || index < shownActions
+                ActionRow(
+                    action = action,
+                    visible = visible,
+                    isNew = isNew(action),
+                    isUsed = isUsed(action),
+                    costHint = costHintFor(action),
+                    onClick = { onClick(action) }
+                )
+            }
+        }
+
+        if (showScrollHint) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(36.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color(0xFFE8DBC0).copy(alpha = 0.95f)
+                            )
+                        )
+                    )
+            )
+            Text(
+                text = "⌄",
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .alpha(0.6f),
+                color = InkDimColor,
+                style = MaterialTheme.typography.titleLarge
+            )
+        }
+    }
+}
+
+/**
+ * Одна строка действия — текст с ромбом-маркером слева.
+ * Пройденные — приглушены, с галочкой вместо ромба.
+ */
+@Composable
+private fun ActionRow(
+    action: Action,
+    visible: Boolean,
+    isNew: Boolean,
+    isUsed: Boolean,
+    costHint: String?,
+    onClick: () -> Unit
+) {
+    val contentDisabled = action.disabledReason != null
+    val alphaAnim by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(350),
+        label = "actionAlpha"
+    )
+
+    val rowColor = when {
+        contentDisabled -> InkDimColor.copy(alpha = 0.5f)
+        isUsed -> InkDimColor
+        else -> InkColor
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer { alpha = alphaAnim }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(
+                    enabled = visible && !contentDisabled,
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    indication = null,
+                    onClick = onClick
+                )
+                .padding(vertical = 2.dp),
+            verticalAlignment = Alignment.Top
+        ) {
+            Text(
+                text = if (isUsed) "✓" else "◆",
+                color = if (isUsed) GoldColor.copy(alpha = 0.5f) else GoldColor,
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier
+                    .padding(end = 10.dp)
+                    .width(20.dp)
+            )
+
+            Text(
+                text = action.text,
+                color = rowColor,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = if (isNew) FontWeight.SemiBold else FontWeight.Normal,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+
+            if (!costHint.isNullOrBlank() && !contentDisabled) {
+                Text(
+                    text = "  $costHint",
+                    color = InkDimColor,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
+            }
+        }
+
+        if (contentDisabled) {
+            Text(
+                text = action.disabledReason.orEmpty(),
+                color = InkDimColor,
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(start = 30.dp, top = 2.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Три закладки в правом верхнем углу — картинка bookmarks.png.
+ * Поверх картинки — три невидимые зоны нажатия.
+ */
+@Composable
+private fun BookmarksRow(
+    modifier: Modifier = Modifier,
+    onInventory: () -> Unit,
+    onJournal: () -> Unit,
+    onSettings: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .height(120.dp)
+            .width(180.dp)
+    ) {
+        AssetImage(
+            fileName = "bookmarks.png",
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Fit
+        )
+
+        // Три невидимые зоны нажатия — примерно под тремя иконками закладок.
+        // Левая (бордовая) — инвентарь, средняя (тёмная) — журнал, правая (коричневая) — настройки.
+        Row(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null,
+                        onClick = onInventory
+                    )
+            )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null,
+                        onClick = onJournal
+                    )
+            )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null,
+                        onClick = onSettings
+                    )
+            )
+        }
+    }
+}
+
+/**
+ * Ресурсы (золото и др.) — отображаются текстом справа под закладками.
+ * Пока без иконок, визуал будет доработан позже.
+ */
+@Composable
+private fun ResourcesRow(
+    resources: Map<String, GameResource>,
+    modifier: Modifier = Modifier
+) {
+    if (resources.isEmpty()) return
+
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        resources.values.forEach { resource ->
+            Text(
+                text = "${resourceIcon(resource.id)} ${resource.currentValue}",
+                color = InkColor,
+                style = MaterialTheme.typography.labelLarge
+            )
+        }
+    }
+}
+
+private fun resourceIcon(resourceId: String): String = when (resourceId) {
+    "gold" -> "🪙"
+    "time" -> "⏳"
+    else -> "◆"
 }

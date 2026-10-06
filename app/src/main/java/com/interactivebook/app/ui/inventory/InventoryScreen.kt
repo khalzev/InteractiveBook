@@ -7,18 +7,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -28,10 +24,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.interactivebook.app.R
 import com.interactivebook.app.core.checks.CheckOutcome
 import com.interactivebook.app.core.checks.CheckResolution
 import com.interactivebook.app.core.effects.Effect
@@ -39,12 +36,15 @@ import com.interactivebook.app.core.model.Action
 import com.interactivebook.app.core.model.GameResource
 import com.interactivebook.app.core.model.Item
 import com.interactivebook.app.ui.check.CheckRollOverlay
+import com.interactivebook.app.ui.common.AssetImage
+
+private val InkColor = Color(0xFF3B2A1A)
+private val InkDimColor = Color(0xFF6B5A44)
+private val GoldColor = Color(0xFFB8925A)
 
 /**
- * Инвентарь (раздел 35): сетка карточек предметов. Предметы, у которых есть examineAction
- * (см. GameViewModel.examineAction), можно осмотреть тапом — это обычное Action движка: может
- * содержать Check и Effects, в том числе Transition — если после осмотра сцена меняется,
- * экран автоматически возвращается назад, чтобы игрок увидел новую сцену.
+ * Инвентарь — страница книги (book_open.png) со списком предметов.
+ * Визуал позже: страница под инвентарь будет отдельной (book_inventory.png).
  */
 @Composable
 fun InventoryScreen(
@@ -73,60 +73,58 @@ fun InventoryScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        AssetImage(
+            fileName = "book_open.png",
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .safeDrawingPadding()
-                .padding(horizontal = 20.dp, vertical = 16.dp)
+                .padding(start = 118.dp, end = 28.dp, top = 130.dp, bottom = 40.dp)
         ) {
-            TextButton(onClick = onBack) { Text("← Назад") }
-            Text("Инвентарь", style = MaterialTheme.typography.headlineMedium)
-            Spacer(Modifier.height(16.dp))
-
-            if (resources.isNotEmpty()) {
-                Text("Ресурсы", style = MaterialTheme.typography.labelLarge)
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    resources.values.forEach { resource ->
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant
-                        ) {
-                            Text(
-                                text = "${resourceIcon(resource.id)} ${resource.name}: ${resource.currentValue}",
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.height(20.dp))
+            TextButton(onClick = onBack) {
+                Text(stringResource(R.string.back), color = InkDimColor)
             }
 
-            Text("Предметы", style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Инвентарь",
+                style = MaterialTheme.typography.headlineMedium,
+                color = InkColor
+            )
+            Spacer(Modifier.height(12.dp))
+
+            if (resources.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    resources.values.forEach { resource ->
+                        Text(
+                            text = "${resourceIcon(resource.id)} ${resource.name}: ${resource.currentValue}",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = InkColor
+                        )
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+            }
 
             if (items.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         "Пока пусто",
                         style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = InkDimColor
                     )
                 }
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(items, key = { it.id }) { item ->
                         val examinable = examineActionFor(item) != null
-                        ItemCard(
-                            item = item,
-                            examinable = examinable,
-                            onClick = { if (examinable) examine(item) }
-                        )
+                        ItemRow(item = item, examinable = examinable, onClick = {
+                            if (examinable) examine(item)
+                        })
                     }
                 }
             }
@@ -147,60 +145,38 @@ fun InventoryScreen(
 }
 
 @Composable
-private fun ItemCard(item: Item, examinable: Boolean, onClick: () -> Unit) {
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
+private fun ItemRow(item: Item, examinable: Boolean, onClick: () -> Unit) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(0.85f)
             .clickable(enabled = examinable, onClick = onClick)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(text = "🎒", fontSize = 40.sp)
-                if (item.quantity > 1) {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(6.dp)
-                    ) {
-                        Text(
-                            text = "×${item.quantity}",
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            Text(item.name, style = MaterialTheme.typography.titleLarge, maxLines = 1)
+        Text(
+            text = "◆",
+            color = GoldColor,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(end = 10.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = if (item.quantity > 1) "${item.name} ×${item.quantity}" else item.name,
+                style = MaterialTheme.typography.titleLarge,
+                color = InkColor
+            )
             if (item.description.isNotBlank()) {
-                Spacer(Modifier.height(2.dp))
                 Text(
                     text = item.description,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3
+                    color = InkDimColor
                 )
             }
             if (examinable) {
-                Spacer(Modifier.height(2.dp))
                 Text(
                     text = "Рассмотреть",
                     style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary
+                    color = GoldColor
                 )
             }
         }

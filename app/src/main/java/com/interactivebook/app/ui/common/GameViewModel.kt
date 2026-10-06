@@ -40,10 +40,21 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     var revealSpeed by mutableStateOf(RevealSpeed.DEFAULT)
         private set
 
+    /** Настройка: перелистывание страниц. По умолчанию — включено. */
+    var pageTurnEnabled by mutableStateOf(true)
+        private set
+
     fun updateRevealSpeed(speed: RevealSpeed) {
         revealSpeed = speed
         viewModelScope.launch {
             SettingsRepository.saveRevealSpeed(getApplication(), speed)
+        }
+    }
+
+    fun updatePageTurnEnabled(enabled: Boolean) {
+        pageTurnEnabled = enabled
+        viewModelScope.launch {
+            SettingsRepository.savePageTurnEnabled(getApplication(), enabled)
         }
     }
 
@@ -64,6 +75,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             revealSpeed = SettingsRepository.loadRevealSpeed(getApplication())
         }
+        viewModelScope.launch {
+            pageTurnEnabled = SettingsRepository.loadPageTurnEnabled(getApplication())
+        }
     }
 
     /** Меняет состояние и сразу же сохраняет его — автосейв при каждом изменении (раздел 67). */
@@ -74,11 +88,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /**
-     * New Game (раздел 69): полностью пересоздаёт GameState и сразу стартует в пролог —
-     * без персонажа (он появится позже, когда сюжет дойдёт до момента выбора класса —
-     * см. requiresCharacterCreation в Action).
-     */
     fun startNewGame() {
         revealedSceneId = null
         val newState = GameState.newGame(
@@ -100,7 +109,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         return DemoContent.scenes.firstOrNull { it.id == state.currentSceneId }
     }
 
-    /** Текст сцены с учётом textVariants (раздел 73 — текст, зависящий от GameState). */
+    /** Текст сцены с учётом textVariants. */
     fun resolveSceneText(scene: Scene): String {
         val state = gameState ?: return scene.text
         return scene.textVariants.firstOrNull { ConditionEvaluator.isMet(it.condition, state) }?.text
@@ -111,13 +120,9 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun examineAction(item: Item): Action? = DemoContent.itemExamineActions[item.id]
 
     /**
-     * Действия, доступные при текущем GameState (раздел 29 — Conditions решают доступность).
-     *
-     * Порядок (трёхступенчатая сортировка, стабильная — авторский порядок внутри группы
-     * сохраняется):
-     *   1. Новые — те, что появились в этой сцене после прошлого визита.
-     *   2. Непройденные — те, что игрок видел, но не нажимал.
-     *   3. Пройденные — те, что уже нажимал. Они уезжают вниз и визуально приглушаются.
+     * Действия, доступные при текущем GameState.
+     * Порядок: 1) новые — наверху; 2) непройденные; 3) пройденные — внизу.
+     * Стабильная сортировка — авторский порядок внутри группы сохраняется.
      */
     fun visibleActions(scene: Scene): List<Action> {
         val state = gameState ?: return emptyList()
@@ -134,11 +139,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * ID действий, которые появились ПОСЛЕ прошлого визита в эту сцену — то есть условие
-     * стало выполняться из-за изменения GameState уже после того, как игрок впервые видел сцену.
-     *
-     * ВАЖНО: при первом визите в сцену ничего не считается "новым" — подсвечивать нечего.
-     * seenActionsByScene не содержит ключа scene.id ровно до первого вызова markActionsSeen.
+     * ID действий, которые появились ПОСЛЕ прошлого визита в эту сцену.
      */
     fun newlyAvailableActionIds(scene: Scene): Set<String> {
         val state = gameState ?: return emptySet()
@@ -152,19 +153,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         return visibleIds - alreadySeen
     }
 
-    /**
-     * ID действий, которые игрок уже РЕАЛЬНО НАЖИМАЛ в этой сцене. Используется UI, чтобы
-     * помечать пройденные действия (галочка + приглушение).
-     */
+    /** ID действий, которые игрок уже реально нажимал в этой сцене. */
     fun usedActionIds(scene: Scene): Set<String> {
         val state = gameState ?: return emptySet()
         return state.usedActionsByScene[scene.id] ?: emptySet()
     }
 
     /**
-     * Автоподсказка стоимости на кнопке действия. Смотрим эффекты и, если среди них есть
-     * ChangeResource с отрицательной дельтой, возвращаем готовую строку вида "(–2 Золото)".
-     * Если действие помечено hideCostHint = true, подсказка не показывается.
+     * Автоподсказка стоимости — для действий с отрицательным ChangeResource.
      */
     fun costHintFor(action: Action): String? {
         if (action.hideCostHint) return null
@@ -177,11 +173,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /**
-     * Запоминает текущий набор видимых действий сцены как "уже виденный" — вызывается при
-     * каждом входе в сцену, ПОСЛЕ того, как newlyAvailableActionIds уже сохранил список для
-     * подсветки в этом визите.
-     */
     fun markActionsSeen(scene: Scene) {
         val state = gameState ?: return
         val visibleIds = scene.actions
@@ -195,7 +186,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Помечает конкретное действие как "уже нажатое" в текущей сцене. */
     private fun markActionUsed(state: GameState, sceneId: String, actionId: String): GameState {
         val current = state.usedActionsByScene[sceneId] ?: emptySet()
         if (actionId in current) return state
@@ -213,17 +203,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         updateState(engine.applyEffects(withUsed, action.effects))
     }
 
-    /**
-     * Вычисляет результат проверки (не меняя GameState) — анимация в UI отделена от логики
-     * (раздел 26): сначала считаем итог здесь, затем UI его просто визуализирует.
-     */
     fun resolveCheck(action: Action): CheckResolution? {
         val state = gameState ?: return null
         val check = action.check ?: return null
         return CheckResolver.resolve(action.text, check, state.character)
     }
 
-    /** Применяет Effects нужной ветки результата после того, как UI показал исход. */
     fun applyCheckOutcome(action: Action, outcome: CheckOutcome) {
         val state = gameState ?: return
         val sceneId = state.currentSceneId
@@ -231,8 +216,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         updateState(engine.applyCheckOutcome(action, outcome, withUsed))
     }
 
-    /** Effects, которые применятся для данного исхода — не меняя состояние. Нужно UI (инвентарь),
-     * чтобы понять заранее, произойдёт ли переход сцены после подтверждения результата. */
     fun outcomeEffects(action: Action, outcome: CheckOutcome): List<Effect> =
         engine.effectsForOutcome(action, outcome)
 }

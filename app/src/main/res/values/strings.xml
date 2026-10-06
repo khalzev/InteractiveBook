@@ -1,32 +1,46 @@
 <resources>
     <string name="app_name">Тайны Риверстоуна</string>
 
-    <string name="menu_new_game">Новая игра</string>
-    <string name="menu_continue">Продолжить</string>
+    <!-- Главное меню -->
+    <string name="menu_continue">Продолжить читать</string>
+    <string name="menu_new_game">Новая История</string>
     <string name="menu_settings">Настройки</string>
     <string name="menu_exit">Выход из игры</string>
 
-    <string name="menu_new_game_confirm_title">Начать новую игру?</string>
+    <string name="menu_new_game_confirm_title">Начать новую историю?</string>
     <string name="menu_new_game_confirm_text">Текущий прогресс будет полностью сброшен. Это действие нельзя отменить.</string>
     <string name="action_confirm">Начать</string>
     <string name="action_cancel">Отмена</string>
 
-    <string name="scene_action_back_to_menu">Вернуться в меню</string>
-    <string name="scene_menu_inventory">Инвентарь</string>
-    <string name="scene_menu_journal">Журнал</string>
-    <string name="scene_menu_settings">Настройки</string>
-    <string name="scene_menu_content_description">Меню</string>
+    <!-- Стартовый экран -->
+    <string name="intro_tap_to_continue">Нажмите для продолжения</string>
+
+    <!-- Страница сцены -->
     <string name="placeholder_illustration">Иллюстрация сцены</string>
 
-    <!-- Новое для шапки навигации и подтверждения выхода -->
-    <string name="nav_home_content_description">Вернуться в главное меню</string>
-    <string name="nav_journal_content_description">Журнал</string>
-    <string name="nav_inventory_content_description">Инвентарь</string>
-    <string name="nav_settings_content_description">Настройки</string>
-    <string name="nav_resource_content_description">Ресурсы</string>
+    <!-- Настройки -->
+    <string name="settings_title">Настройки</string>
+    <string name="settings_reveal_speed_title">Скорость появления сцены</string>
+    <string name="settings_reveal_speed_description">Изображение, текст и варианты действий могут появляться постепенно, как страница книги, или сразу целиком. Во время постепенного появления короткое нажатие на экран ускоряет текущий этап, а удержание — приостанавливает.</string>
+    <string name="settings_reveal_instant">Мгновенно</string>
+    <string name="settings_reveal_instant_desc">Сцена появляется сразу целиком, без анимации.</string>
+    <string name="settings_reveal_fast">Быстро</string>
+    <string name="settings_reveal_fast_desc">Постепенное появление в обычном темпе.</string>
+    <string name="settings_reveal_slow">Медленно</string>
+    <string name="settings_reveal_slow_desc">Постепенное появление вдвое медленнее — по умолчанию.</string>
 
+    <string name="settings_page_turn_title">Перелистывание страниц</string>
+    <string name="settings_page_turn_description">При переходах между сценами книга «перелистывает» страницу. Можно отключить, если анимация кажется долгой.</string>
+    <string name="settings_page_turn_on">Включено</string>
+    <string name="settings_page_turn_off">Выключено</string>
+
+    <!-- Подтверждение выхода в меню -->
     <string name="exit_to_menu_title">Вернуться в главное меню?</string>
-    <string name="exit_to_menu_message">Прогресс сохранён. Вы сможете продолжить игру с этого же места.</string>
+    <string name="exit_to_menu_message">Прогресс сохранён. Вы сможете продолжить чтение с этого же места.</string>
     <string name="exit_to_menu_confirm">Вернуться</string>
     <string name="exit_to_menu_cancel">Остаться</string>
+
+    <!-- Общее -->
+    <string name="back">← Назад</string>
+    <string name="continue_label">Продолжить</string>
 </resources>

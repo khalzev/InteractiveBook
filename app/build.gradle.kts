@@ -76,6 +76,8 @@ dependencies {
 
     // Хранение состояния (GameState) — DataStore, будет задействован начиная с этапа Save (Этап 6)
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
+    implementation("androidx.media3:media3-ui:1.4.1")
 
     // Сериализация контента и GameState в JSON
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
