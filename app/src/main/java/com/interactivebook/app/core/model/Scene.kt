@@ -15,9 +15,8 @@ data class TextVariant(val condition: Condition, val text: String)
  * отдельным экраном перед сценой, если у неё задан partTitle (см. ui/common/PartTitleScreen).
  */
 data class PartTitle(
-    val partLabel: String,
-    val title: String,
-    val chapterLabel: String
+    val chapterImage: String?,   // например "chapter_title.png" — может быть null
+    val partImage: String        // например "part_title_prologue.png"
 )
 
 /**

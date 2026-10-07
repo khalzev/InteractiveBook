@@ -45,11 +45,20 @@ fun JournalScreen(
     val titleById = information.associateBy({ it.id }, { it.title })
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // Слой 0: фон — текстура дерева на весь экран.
+        AssetImage(
+            fileName = "background.png",
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+
+        // Слой 1: книга — вписывается целиком (Fit).
         AssetImage(
             fileName = "book_open.png",
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
+            contentScale = ContentScale.Fit
         )
 
         Column(

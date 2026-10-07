@@ -6,6 +6,7 @@ import com.interactivebook.app.core.effects.Effect
 import com.interactivebook.app.core.model.Action
 import com.interactivebook.app.core.model.InformationType
 import com.interactivebook.app.core.model.Scene
+import com.interactivebook.app.core.model.PartTitle
 import com.interactivebook.app.core.model.SkillType
 import com.interactivebook.app.core.model.StatType
 
@@ -32,6 +33,10 @@ object Chapter1 {
     private val alleyEntrance = Scene(
         id = "c1_alley_entrance",
         locationId = "lower_city_alley",
+        partTitle = PartTitle(
+            chapterImage = "chapter_title.png",
+            partImage = "part_title_case1.png"
+        ),
         text = "Переулок Нижнего города встречает вас запахом сырого камня, помоев и вчерашнего " +
                 "дождя. Между покосившимися домами едва пробивается серый дневной свет. На стенах " +
                 "темнеют потёки влаги, а из щелей между булыжниками пробивается грязная трава.\n\n" +

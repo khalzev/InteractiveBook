@@ -46,9 +46,8 @@ object DemoContent {
                 "Сначала появилась крепость на высоком каменном берегу, потом пристань, за ней выросли " +
                 "рынки, храмы, постоялые дворы и множество домов зажиточных граждан.",
         partTitle = PartTitle(
-            partLabel = "Книга Первая",
-            title = "«Город у реки»",
-            chapterLabel = "Пролог"
+            chapterImage = "chapter_title.png",
+            partImage = "part_title_prologue.png"
         ),
         actions = listOf(
             Action(id = "p01_continue", text = "Продолжить", effects = listOf(Effect.Transition("prologue_02"))),

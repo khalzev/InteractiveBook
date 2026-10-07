@@ -1,12 +1,14 @@
 package com.interactivebook.app.ui.scene
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,7 +41,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -84,10 +85,10 @@ private const val PAUSE_POLL_MS = 16L
 private const val TAP_MAX_DURATION_MS = 250L
 
 // ---- Палитра ----
-// Цвета «чернил» текста на странице книги.
 private val InkColor = Color(0xFF3B2A1A)
 private val InkDimColor = Color(0xFF6B5A44)
 private val GoldColor = Color(0xFFB8925A)
+private val BurgundyColor = Color(0xFF7A2525)
 
 private enum class RevealStage { ILLUSTRATION, TEXT, ACTIONS, DONE }
 
@@ -104,17 +105,6 @@ private suspend fun pausableDelay(totalMs: Long, isPaused: () -> Boolean) {
     }
 }
 
-/**
- * Экран сцены — страница книги с закладками.
- *
- * Компоновка (сверху вниз, все три зоны внутри страницы):
- *   1. Иллюстрация сцены с золотой рамкой — 25% высоты.
- *   2. Текст сцены (с внутренним скроллом) — 50% высоты.
- *   3. Список действий с ромбами (с внутренним скроллом) — 25% высоты.
- *
- * Закладки (bookmarks.png) — накладываются в правом верхнем углу, поверх страницы.
- * Программно поверх иконок закладок — невидимые зоны нажатия.
- */
 @Composable
 fun SceneScreen(
     scene: Scene,
@@ -133,8 +123,7 @@ fun SceneScreen(
     onTriggerCharacterCreation: (Action) -> Unit,
     onOpenMainMenu: () -> Unit,
     onOpenInventory: () -> Unit,
-    onOpenJournal: () -> Unit,
-    onOpenSettings: () -> Unit
+    onOpenJournal: () -> Unit
 ) {
     var pendingCheck by remember { mutableStateOf<Pair<Action, CheckResolution>?>(null) }
     var pendingConfirmation by remember { mutableStateOf<Action?>(null) }
@@ -196,7 +185,7 @@ fun SceneScreen(
         illustrationAlpha.snapTo(1f)
         delay(PAUSE_AFTER_ILLUSTRATION_MS)
 
-        // Этап 2: текст по буквам.
+        // Этап 2: текст.
         stage = RevealStage.TEXT
         if (!skipText) {
             val total = displayText.length
@@ -212,7 +201,7 @@ fun SceneScreen(
         revealedChars = displayText.length
         delay(PAUSE_AFTER_TEXT_MS)
 
-        // Этап 3: действия по одному.
+        // Этап 3: действия.
         stage = RevealStage.ACTIONS
         if (!skipActions) {
             var i = 0
@@ -258,26 +247,42 @@ fun SceneScreen(
                 }
             }
     ) {
-        // ---- Фон: страница открытой книги ----
+        // ---- Слой 0: фон — текстура дерева ----
         AssetImage(
-            fileName = "book_open.png",
+            fileName = "background.png",
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
 
-        // ---- Всё содержимое страницы, с отступами под разворот книги ----
-        // Левая страница книги (уходит за край) — декоративная, ничего не показываем.
-        // Правая страница — на ней весь контент. Отступы подобраны под пропорции
-        // страницы (примерно 55% ширины от левого края).
+        // ---- Слой 1: страница открытой книги ----
+        AssetImage(
+            fileName = "book_open.png",
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Fit
+        )
+
+        // ---- Слой 2: закладки в правом верхнем углу ----
+        BookmarksRow(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(top = 4.dp, end = 4.dp),
+            onInventory = onOpenInventory,
+            onJournal = onOpenJournal,
+            onMenu = onOpenMainMenu
+        )
+
+        // ---- Слой 3: контент страницы ----
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(start = 118.dp, end = 28.dp, top = 130.dp, bottom = 40.dp)
+                .padding(start = 110.dp, end = 24.dp, top = 120.dp, bottom = 24.dp)
         ) {
 
-            // ---- Зона 1: иллюстрация (25%) ----
+            // Зона 1: иллюстрация (25%)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -285,12 +290,12 @@ fun SceneScreen(
                     .graphicsLayer { alpha = illustrationAlpha.value },
                 contentAlignment = Alignment.Center
             ) {
-                IllustrationWithFrame(stage)
+                IllustrationWithFrame()
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
 
-            // ---- Зона 2: текст сцены (50%) ----
+            // Зона 2: текст сцены (50%)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -306,12 +311,12 @@ fun SceneScreen(
 
             Spacer(Modifier.height(8.dp))
 
-            // ---- Разделитель между текстом и действиями ----
+            // Разделитель
             OrnamentalDivider()
 
             Spacer(Modifier.height(8.dp))
 
-            // ---- Зона 3: действия (25%) ----
+            // Зона 3: действия (25%)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -330,28 +335,17 @@ fun SceneScreen(
             }
         }
 
-        // ---- Закладки в правом верхнем углу (поверх страницы) ----
-        BookmarksRow(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(top = 8.dp, end = 8.dp),
-            onInventory = onOpenInventory,
-            onJournal = onOpenJournal,
-            onSettings = onOpenSettings
-        )
-
-        // ---- Ресурсы (золото и т.д.) — под закладками справа ----
+        // ---- Ресурсы (золото) — под закладками справа ----
         ResourcesRow(
             resources = resources,
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(top = 68.dp, end = 24.dp)
+                .padding(top = 132.dp, end = 24.dp)
         )
     }
 
-    // ---- Оверлей броска кубика ----
+    // Оверлей броска кубика
     pendingCheck?.let { (action, resolution) ->
         CheckRollOverlay(
             resolution = resolution,
@@ -362,7 +356,7 @@ fun SceneScreen(
         )
     }
 
-    // ---- Подтверждение действия (если задано) ----
+    // Подтверждение действия
     pendingConfirmation?.let { action ->
         val confirmation = action.confirmation ?: return@let
         AlertDialog(
@@ -387,20 +381,15 @@ fun SceneScreen(
 }
 
 // ---------------------------------------------------------------------------------------------
-// Компоненты страницы сцены
+// Компоненты
 // ---------------------------------------------------------------------------------------------
 
-/**
- * Иллюстрация сцены с золотой рамкой, нарисованной программно (тонкие линии по периметру).
- * Пока картинки нет — показывается плейсхолдер. Позже сюда подставится картинка по id сцены.
- */
 @Composable
-private fun IllustrationWithFrame(stage: RevealStage) {
+private fun IllustrationWithFrame() {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        // Внутренняя зона — сюда позже ляжет картинка сцены.
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -414,25 +403,19 @@ private fun IllustrationWithFrame(stage: RevealStage) {
                 style = MaterialTheme.typography.labelLarge
             )
         }
-
-        // Рамка — тонкая золотая линия по периметру, рисуется поверх.
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(2.dp)
                 .border(
                     width = 1.dp,
-                    color = GoldColor.copy(alpha = 0.8f),
+                    color = BurgundyColor.copy(alpha = 0.85f),
                     shape = RoundedCornerShape(2.dp)
                 )
         )
     }
 }
 
-/**
- * Текст сцены с постепенным проявлением (эффект печатной машинки).
- * С внутренним скроллом и мягким градиентом у нижнего края, если есть скрытый текст.
- */
 @Composable
 private fun TextArea(
     displayText: String,
@@ -466,7 +449,6 @@ private fun TextArea(
             )
         }
 
-        // Градиент затухания + стрелка вниз — если есть скрытый текст.
         if (showScrollHint) {
             Box(
                 modifier = Modifier
@@ -495,10 +477,6 @@ private fun TextArea(
     }
 }
 
-/**
- * Декоративный разделитель между текстом и действиями — горизонтальная линия
- * с ромбом посередине. Рисуется программно.
- */
 @Composable
 private fun OrnamentalDivider() {
     Row(
@@ -511,11 +489,11 @@ private fun OrnamentalDivider() {
             modifier = Modifier
                 .weight(1f)
                 .height(1.dp)
-                .background(GoldColor.copy(alpha = 0.6f))
+                .background(BurgundyColor.copy(alpha = 0.6f))
         )
         Text(
             text = "◆",
-            color = GoldColor,
+            color = BurgundyColor,
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier.padding(horizontal = 10.dp)
         )
@@ -523,15 +501,11 @@ private fun OrnamentalDivider() {
             modifier = Modifier
                 .weight(1f)
                 .height(1.dp)
-                .background(GoldColor.copy(alpha = 0.6f))
+                .background(BurgundyColor.copy(alpha = 0.6f))
         )
     }
 }
 
-/**
- * Список действий с ромбами-маркерами. С внутренним скроллом.
- * Пройденные действия — приглушены, с галочкой. Новые — с лёгким выделением.
- */
 @Composable
 private fun ActionsList(
     actions: List<Action>,
@@ -593,10 +567,6 @@ private fun ActionsList(
     }
 }
 
-/**
- * Одна строка действия — текст с ромбом-маркером слева.
- * Пройденные — приглушены, с галочкой вместо ромба.
- */
 @Composable
 private fun ActionRow(
     action: Action,
@@ -607,7 +577,7 @@ private fun ActionRow(
     onClick: () -> Unit
 ) {
     val contentDisabled = action.disabledReason != null
-    val alphaAnim by androidx.compose.animation.core.animateFloatAsState(
+    val alphaAnim by animateFloatAsState(
         targetValue = if (visible) 1f else 0f,
         animationSpec = tween(350),
         label = "actionAlpha"
@@ -629,7 +599,7 @@ private fun ActionRow(
                 .fillMaxWidth()
                 .clickable(
                     enabled = visible && !contentDisabled,
-                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                    interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = onClick
                 )
@@ -638,7 +608,7 @@ private fun ActionRow(
         ) {
             Text(
                 text = if (isUsed) "✓" else "◆",
-                color = if (isUsed) GoldColor.copy(alpha = 0.5f) else GoldColor,
+                color = if (isUsed) BurgundyColor.copy(alpha = 0.5f) else BurgundyColor,
                 style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier
                     .padding(end = 10.dp)
@@ -674,21 +644,17 @@ private fun ActionRow(
     }
 }
 
-/**
- * Три закладки в правом верхнем углу — картинка bookmarks.png.
- * Поверх картинки — три невидимые зоны нажатия.
- */
 @Composable
 private fun BookmarksRow(
     modifier: Modifier = Modifier,
     onInventory: () -> Unit,
     onJournal: () -> Unit,
-    onSettings: () -> Unit
+    onMenu: () -> Unit
 ) {
     Box(
         modifier = modifier
-            .height(120.dp)
-            .width(180.dp)
+            .height(140.dp)
+            .width(170.dp)
     ) {
         AssetImage(
             fileName = "bookmarks.png",
@@ -697,15 +663,13 @@ private fun BookmarksRow(
             contentScale = ContentScale.Fit
         )
 
-        // Три невидимые зоны нажатия — примерно под тремя иконками закладок.
-        // Левая (бордовая) — инвентарь, средняя (тёмная) — журнал, правая (коричневая) — настройки.
         Row(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxSize()
                     .clickable(
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = onInventory
                     )
@@ -715,7 +679,7 @@ private fun BookmarksRow(
                     .weight(1f)
                     .fillMaxSize()
                     .clickable(
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = onJournal
                     )
@@ -725,19 +689,15 @@ private fun BookmarksRow(
                     .weight(1f)
                     .fillMaxSize()
                     .clickable(
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = onSettings
+                        onClick = onMenu
                     )
             )
         }
     }
 }
 
-/**
- * Ресурсы (золото и др.) — отображаются текстом справа под закладками.
- * Пока без иконок, визуал будет доработан позже.
- */
 @Composable
 private fun ResourcesRow(
     resources: Map<String, GameResource>,

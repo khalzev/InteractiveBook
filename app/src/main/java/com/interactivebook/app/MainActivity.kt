@@ -36,6 +36,7 @@ import com.interactivebook.app.ui.character.CharacterCreationScreen
 import com.interactivebook.app.ui.common.AssetImage
 import com.interactivebook.app.ui.common.BookVideoPlayer
 import com.interactivebook.app.ui.common.GameViewModel
+import com.interactivebook.app.ui.common.PageTurnOverlay
 import com.interactivebook.app.ui.common.PartTitleScreen
 import com.interactivebook.app.ui.inventory.InventoryScreen
 import com.interactivebook.app.ui.journal.JournalScreen
@@ -82,6 +83,7 @@ private fun InteractiveBookApp() {
         StartupStage.INTRO_VIDEO -> {
             BookVideoPlayer(
                 fileName = "intro_book.mp4",
+                allowSkip = true,
                 onFinished = { startupStage = StartupStage.CLOSED_BOOK }
             )
         }
@@ -93,6 +95,7 @@ private fun InteractiveBookApp() {
         StartupStage.OPENING_VIDEO -> {
             BookVideoPlayer(
                 fileName = "book_opening.mp4",
+                allowSkip = true,
                 onFinished = { startupStage = StartupStage.DONE }
             )
         }
@@ -124,10 +127,17 @@ private fun ClosedBookScreen(onContinue: () -> Unit) {
             .clickable(onClick = onContinue)
     ) {
         AssetImage(
-            fileName = "book_closed.png",
+            fileName = "background.png",
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
+        )
+
+        AssetImage(
+            fileName = "book_closed.png",
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Fit
         )
 
         if (showHint) {
@@ -151,108 +161,162 @@ private fun InteractiveBookNavHost(
     pendingCharacterCreationAction: Action?,
     setPendingCharacterCreationAction: (Action?) -> Unit
 ) {
-    NavHost(navController = navController, startDestination = ROUTE_MENU) {
+    // Замыкание — что делать после перелистывания. null = перелистывания нет.
+    var pendingNavigation by remember { mutableStateOf<(() -> Unit)?>(null) }
 
-        composable(ROUTE_MENU) {
-            MainMenuPage(
-                hasSavedGame = viewModel.hasSavedGame(),
-                onNewGame = {
-                    viewModel.startNewGame()
-                    navController.navigate(ROUTE_SCENE)
-                },
-                onContinue = {
-                    if (viewModel.hasSavedGame()) {
-                        navController.navigate(ROUTE_SCENE)
-                    }
-                },
-                onSettings = { navController.navigate(ROUTE_SETTINGS) },
-                onExit = onExit
-            )
+    // Обёртка: если перелистывание включено — показать оверлей и потом выполнить action.
+    // Если выключено — сразу action().
+    fun withPageTurn(action: () -> Unit) {
+        if (viewModel.pageTurnEnabled) {
+            pendingNavigation = action
+        } else {
+            action()
         }
+    }
 
-        composable(ROUTE_CHARACTER_CREATION) {
-            CharacterCreationScreen(
-                onCharacterReady = { character ->
-                    val action = pendingCharacterCreationAction
-                    viewModel.setCharacterAndApplyEffects(character, action?.effects ?: emptyList())
-                    setPendingCharacterCreationAction(null)
-                    navController.navigate(ROUTE_SCENE) {
-                        popUpTo(ROUTE_CHARACTER_CREATION) { inclusive = true }
-                    }
-                }
-            )
-        }
+    Box(modifier = Modifier.fillMaxSize()) {
 
-        composable(ROUTE_SCENE) {
-            val scene = viewModel.currentScene() ?: DemoContent.startingScene
-            var showingPartTitle by rememberSaveable(scene.id) { mutableStateOf(scene.partTitle != null) }
+        NavHost(navController = navController, startDestination = ROUTE_MENU) {
 
-            val newActionIds = remember(scene.id) { viewModel.newlyAvailableActionIds(scene) }
-            val usedActionIds = viewModel.usedActionIds(scene)
-
-            LaunchedEffect(scene.id) {
-                viewModel.markActionsSeen(scene)
+            composable(ROUTE_MENU) {
+                MainMenuPage(
+                    hasSavedGame = viewModel.hasSavedGame(),
+                    onNewGame = {
+                        viewModel.startNewGame()
+                        withPageTurn { navController.navigate(ROUTE_SCENE) }
+                    },
+                    onContinue = {
+                        if (viewModel.hasSavedGame()) {
+                            withPageTurn { navController.navigate(ROUTE_SCENE) }
+                        }
+                    },
+                    onSettings = {
+                        withPageTurn { navController.navigate(ROUTE_SETTINGS) }
+                    },
+                    onExit = onExit
+                )
             }
 
-            if (showingPartTitle && scene.partTitle != null) {
-                PartTitleScreen(
-                    partTitle = scene.partTitle,
-                    onContinue = { showingPartTitle = false }
+            composable(ROUTE_CHARACTER_CREATION) {
+                CharacterCreationScreen(
+                    onCharacterReady = { character ->
+                        val action = pendingCharacterCreationAction
+                        viewModel.setCharacterAndApplyEffects(character, action?.effects ?: emptyList())
+                        setPendingCharacterCreationAction(null)
+                        withPageTurn {
+                            navController.navigate(ROUTE_SCENE) {
+                                popUpTo(ROUTE_CHARACTER_CREATION) { inclusive = true }
+                            }
+                        }
+                    }
                 )
-            } else {
-                SceneScreen(
-                    scene = scene,
-                    displayText = viewModel.resolveSceneText(scene),
-                    actions = viewModel.visibleActions(scene),
-                    newActionIds = newActionIds,
-                    usedActionIds = usedActionIds,
-                    costHintFor = { action -> viewModel.costHintFor(action) },
+            }
+
+            composable(ROUTE_SCENE) {
+                val scene = viewModel.currentScene() ?: DemoContent.startingScene
+                var showingPartTitle by rememberSaveable(scene.id) {
+                    mutableStateOf(scene.partTitle != null)
+                }
+
+                val newActionIds = remember(scene.id) { viewModel.newlyAvailableActionIds(scene) }
+                val usedActionIds = viewModel.usedActionIds(scene)
+
+                LaunchedEffect(scene.id) {
+                    viewModel.markActionsSeen(scene)
+                }
+
+                if (showingPartTitle && scene.partTitle != null) {
+                    PartTitleScreen(
+                        partTitle = scene.partTitle,
+                        onContinue = { showingPartTitle = false }
+                    )
+                } else {
+                    SceneScreen(
+                        scene = scene,
+                        displayText = viewModel.resolveSceneText(scene),
+                        actions = viewModel.visibleActions(scene),
+                        newActionIds = newActionIds,
+                        usedActionIds = usedActionIds,
+                        costHintFor = { action -> viewModel.costHintFor(action) },
+                        resources = viewModel.gameState?.resources ?: emptyMap(),
+                        revealedAlready = viewModel.isSceneRevealed(scene.id),
+                        revealSpeed = viewModel.revealSpeed,
+                        onRevealComplete = { viewModel.markSceneRevealed(scene.id) },
+                        onSimpleAction = { action -> viewModel.performAction(action) },
+                        onResolveCheck = { action -> viewModel.resolveCheck(action) },
+                        onApplyCheckOutcome = { action, outcome ->
+                            viewModel.applyCheckOutcome(action, outcome)
+                        },
+                        onTriggerCharacterCreation = { action ->
+                            setPendingCharacterCreationAction(action)
+                            withPageTurn { navController.navigate(ROUTE_CHARACTER_CREATION) }
+                        },
+                        onOpenMainMenu = {
+                            withPageTurn {
+                                navController.navigate(ROUTE_MENU) {
+                                    popUpTo(ROUTE_MENU) { inclusive = true }
+                                }
+                            }
+                        },
+                        onOpenInventory = {
+                            withPageTurn { navController.navigate(ROUTE_INVENTORY) }
+                        },
+                        onOpenJournal = {
+                            withPageTurn { navController.navigate(ROUTE_JOURNAL) }
+                        }
+                    )
+                }
+            }
+
+            composable(ROUTE_INVENTORY) {
+                InventoryScreen(
+                    items = viewModel.gameState?.inventory ?: emptyList(),
                     resources = viewModel.gameState?.resources ?: emptyMap(),
-                    revealedAlready = viewModel.isSceneRevealed(scene.id),
-                    revealSpeed = viewModel.revealSpeed,
-                    onRevealComplete = { viewModel.markSceneRevealed(scene.id) },
+                    examineActionFor = { item -> viewModel.examineAction(item) },
                     onSimpleAction = { action -> viewModel.performAction(action) },
                     onResolveCheck = { action -> viewModel.resolveCheck(action) },
-                    onApplyCheckOutcome = { action, outcome -> viewModel.applyCheckOutcome(action, outcome) },
-                    onTriggerCharacterCreation = { action ->
-                        setPendingCharacterCreationAction(action)
-                        navController.navigate(ROUTE_CHARACTER_CREATION)
+                    onApplyCheckOutcome = { action, outcome ->
+                        viewModel.applyCheckOutcome(action, outcome)
                     },
-                    onOpenMainMenu = { navController.popBackStack(ROUTE_MENU, inclusive = false) },
-                    onOpenInventory = { navController.navigate(ROUTE_INVENTORY) },
-                    onOpenJournal = { navController.navigate(ROUTE_JOURNAL) },
-                    onOpenSettings = { navController.navigate(ROUTE_SETTINGS) }
+                    outcomeEffects = { action, outcome -> viewModel.outcomeEffects(action, outcome) },
+                    onBack = {
+                        withPageTurn { navController.popBackStack() }
+                    }
+                )
+            }
+
+            composable(ROUTE_SETTINGS) {
+                SettingsScreen(
+                    revealSpeed = viewModel.revealSpeed,
+                    pageTurnEnabled = viewModel.pageTurnEnabled,
+                    onRevealSpeedChange = { viewModel.updateRevealSpeed(it) },
+                    onPageTurnChange = { viewModel.updatePageTurnEnabled(it) },
+                    onBack = {
+                        withPageTurn { navController.popBackStack() }
+                    }
+                )
+            }
+
+            composable(ROUTE_JOURNAL) {
+                JournalScreen(
+                    information = viewModel.gameState?.information ?: emptyList(),
+                    onBack = {
+                        withPageTurn { navController.popBackStack() }
+                    }
                 )
             }
         }
 
-        composable(ROUTE_INVENTORY) {
-            InventoryScreen(
-                items = viewModel.gameState?.inventory ?: emptyList(),
-                resources = viewModel.gameState?.resources ?: emptyMap(),
-                examineActionFor = { item -> viewModel.examineAction(item) },
-                onSimpleAction = { action -> viewModel.performAction(action) },
-                onResolveCheck = { action -> viewModel.resolveCheck(action) },
-                onApplyCheckOutcome = { action, outcome -> viewModel.applyCheckOutcome(action, outcome) },
-                outcomeEffects = { action, outcome -> viewModel.outcomeEffects(action, outcome) },
-                onBack = { navController.popBackStack() }
-            )
-        }
-
-        composable(ROUTE_SETTINGS) {
-            SettingsScreen(
-                revealSpeed = viewModel.revealSpeed,
-                pageTurnEnabled = viewModel.pageTurnEnabled,
-                onRevealSpeedChange = { viewModel.updateRevealSpeed(it) },
-                onPageTurnChange = { viewModel.updatePageTurnEnabled(it) },
-                onBack = { navController.popBackStack() }
-            )
-        }
-
-        composable(ROUTE_JOURNAL) {
-            JournalScreen(
-                information = viewModel.gameState?.information ?: emptyList(),
-                onBack = { navController.popBackStack() }
+        // Оверлей перелистывания — поверх NavHost.
+        // Когда pendingNavigation задан — проигрывается видео, потом выполняется действие.
+        pendingNavigation?.let { action ->
+            PageTurnOverlay(
+                enabled = true,
+                onFinished = {
+                    val a = pendingNavigation
+                    pendingNavigation = null
+                    a?.invoke()
+                }
             )
         }
     }

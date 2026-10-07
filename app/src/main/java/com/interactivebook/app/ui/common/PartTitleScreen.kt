@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -23,59 +24,54 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.interactivebook.app.core.model.PartTitle
 import kotlinx.coroutines.delay
 
-private const val CHAR_DELAY_MS = 45L
-private const val LINE_PAUSE_MS = 320L
-private const val HINT_DELAY_MS = 450L
+private const val HINT_DELAY_MS = 600L
 
-// Цвета «чернил» на странице книги.
-private val InkColor = Color(0xFF3B2A1A)
-private val InkDimColor = Color(0xFF6B5A44)
+private val HintColor = Color(0xFF6B5A44)
 
 /**
- * Экран заголовка части/акта — страница книги (book_open.png) с текстом по центру.
- * Буквы появляются одна за другой, после — подсказка «Нажмите на экран».
+ * Экран титула части — страница книги (book_open.png) поверх фоновой текстуры
+ * дерева (background.png). Вместо текстовой анимации — две картинки:
+ *
+ *   1. chapterImage — название главы (например "chapter_title.png"),
+ *      показывается сверху.
+ *   2. partImage — название части (например "part_title_prologue.png"),
+ *      показывается ниже.
+ *
+ * Подсказка «Нажмите на экран» появляется с задержкой. Тап по экрану — переход дальше.
  */
 @Composable
 fun PartTitleScreen(partTitle: PartTitle, onContinue: () -> Unit) {
-    var partLabelShown by remember(partTitle) { mutableStateOf("") }
-    var titleShown by remember(partTitle) { mutableStateOf("") }
-    var chapterLabelShown by remember(partTitle) { mutableStateOf("") }
     var hintVisible by remember(partTitle) { mutableStateOf(false) }
     var readyToContinue by remember(partTitle) { mutableStateOf(false) }
 
     LaunchedEffect(partTitle) {
-        for (i in 1..partTitle.partLabel.length) {
-            partLabelShown = partTitle.partLabel.take(i)
-            delay(CHAR_DELAY_MS)
-        }
-        delay(LINE_PAUSE_MS)
-        for (i in 1..partTitle.title.length) {
-            titleShown = partTitle.title.take(i)
-            delay(CHAR_DELAY_MS)
-        }
-        delay(LINE_PAUSE_MS)
-        for (i in 1..partTitle.chapterLabel.length) {
-            chapterLabelShown = partTitle.chapterLabel.take(i)
-            delay(CHAR_DELAY_MS)
-        }
         delay(HINT_DELAY_MS)
         hintVisible = true
         readyToContinue = true
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // Слой 0: фон — текстура дерева.
         AssetImage(
-            fileName = "book_open.png",
+            fileName = "background.png",
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
 
+        // Слой 1: книга — вписывается целиком.
+        AssetImage(
+            fileName = "book_open.png",
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Fit
+        )
+
+        // Слой 2: две картинки титула — глава + часть — с обработкой тапа по всему экрану.
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -93,32 +89,36 @@ fun PartTitleScreen(partTitle: PartTitle, onContinue: () -> Unit) {
         ) {
             Column(
                 modifier = Modifier
-                    .padding(start = 120.dp, end = 40.dp),
+                    .fillMaxWidth()
+                    .padding(start = 118.dp, end = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = partLabelShown,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = InkDimColor,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = titleShown,
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = InkColor,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = chapterLabelShown,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = InkDimColor,
-                    textAlign = TextAlign.Center
+                // Картинка главы (например "Глава 1, Город у реки").
+                partTitle.chapterImage?.let { image ->
+                    AssetImage(
+                        fileName = image,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(140.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                    Spacer(Modifier.height(20.dp))
+                }
+
+                // Картинка части (например "Пролог" или "Дело первое: ...").
+                AssetImage(
+                    fileName = partTitle.partImage,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(160.dp),
+                    contentScale = ContentScale.Fit
                 )
             }
         }
 
+        // Слой 3: подсказка внизу.
         AnimatedVisibility(
             visible = hintVisible,
             enter = fadeIn(),
@@ -129,7 +129,7 @@ fun PartTitleScreen(partTitle: PartTitle, onContinue: () -> Unit) {
             Text(
                 text = "Нажмите на экран",
                 style = MaterialTheme.typography.labelLarge,
-                color = InkDimColor
+                color = HintColor
             )
         }
     }
