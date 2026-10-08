@@ -16,19 +16,18 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 
 /**
- * Проигрывает видео из assets/ui/ по имени файла на весь экран,
- * поверх подложки background.png (текстура дерева).
+ * Проигрывает видео из assets/ui/ на весь экран.
  *
- * Особенности:
- * - Если файла нет — тихо вызывает onFinished() сразу.
- * - playWhenReady = true, repeatMode = OFF, volume = 0.
- * - resizeMode = FIT — видео вписывается целиком.
- * - allowSkip = true → тап по экрану мгновенно завершает видео.
- * - allowSkip = false → тап игнорируется.
+ * Слои:
+ *   0. background.png — текстура дерева.
+ *   1. видео (Fit) — вписывается целиком.
+ *   2. book_frame.png — декоративная рамка поверх видео.
+ *   3. (опционально) прозрачный слой для тапа, если allowSkip = true.
+ *
+ * Видео без звука (volume = 0). По окончании — onFinished().
  */
 @Composable
 fun BookVideoPlayer(
@@ -80,7 +79,6 @@ fun BookVideoPlayer(
         }
     }
 
-    // Корневой Box — фон дерева, поверх — видео, поверх — слой для тапа (если allowSkip).
     Box(modifier = modifier.fillMaxSize()) {
 
         // Слой 0: фон — текстура дерева.
@@ -103,8 +101,15 @@ fun BookVideoPlayer(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Слой 2: если allowSkip — невидимая зона нажатия на весь экран.
-        // Тап мгновенно завершает видео.
+        // Слой 2: декоративная рамка поверх видео.
+        AssetImage(
+            fileName = "book_frame.png",
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Fit
+        )
+
+        // Слой 3: если allowSkip — невидимая зона нажатия на весь экран.
         if (allowSkip) {
             Box(
                 modifier = Modifier
@@ -118,4 +123,3 @@ fun BookVideoPlayer(
         }
     }
 }
-

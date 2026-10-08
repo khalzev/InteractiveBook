@@ -6,8 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -16,26 +14,31 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import com.interactivebook.app.R
 import com.interactivebook.app.ui.common.AssetImage
+import com.interactivebook.app.ui.common.BookPageBackground
+import com.interactivebook.app.ui.common.BookPageContent
+
+private const val MENU_TOP_ALPHA_DISABLED = 0.45f
+private const val MENU_TOP_ALPHA_ENABLED = 1.0f
 
 /**
- * Главное меню — страница открытой книги с НАРИСОВАННЫМ текстом (menu_list.png).
+ * Главное меню — страница открытой книги.
  *
- * Поверх картинки — четыре НЕВИДИМЫЕ зоны нажатия, каждая под своей строкой меню.
- * Координаты зон заданы в долях от высоты экрана (weight). При изменении картинки
- * меню — подстроить доли.
+ * Меню состоит из двух картинок:
+ *   - menu_top.png — строка «Продолжить читать»;
+ *   - menu_bottom.png — остальные три строки.
  *
- * Зоны (сверху вниз):
- *   1. Продолжить читать
- *   2. Новая История
- *   3. Настройки
- *   4. Выход из игры
+ * Программно:
+ *   - menu_top.png при отсутствии сохранения рисуется с прозрачностью 0.45
+ *     и его зона нажатия выключена.
+ *   - menu_bottom.png всегда непрозрачный и активен.
+ *
+ * Обе картинки кладутся внутрь BookPageContent — то есть на правую страницу книги.
  */
 @Composable
 fun MainMenuPage(
@@ -48,89 +51,94 @@ fun MainMenuPage(
     var showNewGameConfirm by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Слой 0: фон — текстура дерева.
-        AssetImage(
-            fileName = "background.png",
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
+        // Слой 0-2: фон — дерево + книга + рамка.
+        BookPageBackground()
 
-        // Слой 1: открытая книга.
-        AssetImage(
-            fileName = "book_open.png",
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit
-        )
+        // Слой 3: контент внутри правой страницы.
+        BookPageContent {
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // menu_top.png — «Продолжить читать».
+                // Если нет сохранения — прозрачная, зона нажатия отключена.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .clickable(
+                            enabled = hasSavedGame,
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onContinue
+                        )
+                ) {
+                    AssetImage(
+                        fileName = "menu_top.png",
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .alpha(
+                                if (hasSavedGame) MENU_TOP_ALPHA_ENABLED
+                                else MENU_TOP_ALPHA_DISABLED
+                            ),
+                        contentScale = ContentScale.Fit
+                    )
+                }
 
-        // Слой 2: картинка меню — четыре нарисованные строки.
-        // Размещена на правой странице книги.
-        AssetImage(
-            fileName = "menu_list.png",
-            contentDescription = null,
-            modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .padding(start = 130.dp, end = 30.dp, top = 130.dp, bottom = 60.dp),
-            contentScale = ContentScale.Fit
-        )
+                // menu_bottom.png — остальные три строки.
+                // Всегда непрозрачный. Зоны нажатия — три равные полосы по вертикали.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(3f)
+                ) {
+                    AssetImage(
+                        fileName = "menu_bottom.png",
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
 
-        // Слой 3: невидимые зоны нажатия — поверх картинки меню.
-        // Пропорции делят область картинки на четыре равные полосы.
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .padding(start = 130.dp, end = 30.dp, top = 130.dp, bottom = 60.dp)
-        ) {
-            // Зона 1: Продолжить читать.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .clickable(
-                        enabled = hasSavedGame,
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onContinue
-                    )
-            )
-            // Зона 2: Новая История.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {
-                            if (hasSavedGame) showNewGameConfirm = true else onNewGame()
-                        }
-                    )
-            )
-            // Зона 3: Настройки.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onSettings
-                    )
-            )
-            // Зона 4: Выход из игры.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onExit
-                    )
-            )
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // «Новая История»
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = {
+                                        if (hasSavedGame) showNewGameConfirm = true
+                                        else onNewGame()
+                                    }
+                                )
+                        )
+                        // «Настройки»
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = onSettings
+                                )
+                        )
+                        // «Выход из игры»
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = onExit
+                                )
+                        )
+                    }
+                }
+            }
         }
     }
 

@@ -62,13 +62,15 @@ import com.interactivebook.app.core.model.Scene
 import com.interactivebook.app.core.settings.RevealSpeed
 import com.interactivebook.app.ui.check.CheckRollOverlay
 import com.interactivebook.app.ui.common.AssetImage
+import com.interactivebook.app.ui.common.BookPageBackground
+import com.interactivebook.app.ui.common.BookPageContent
 import kotlin.math.max
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-// ---- Тайминги анимации появления сцены ----
+// ---- Тайминги анимации ----
 private data class RevealTiming(
     val illustrationFadeMs: Int,
     val textBudgetMs: Long,
@@ -87,7 +89,6 @@ private const val TAP_MAX_DURATION_MS = 250L
 // ---- Палитра ----
 private val InkColor = Color(0xFF3B2A1A)
 private val InkDimColor = Color(0xFF6B5A44)
-private val GoldColor = Color(0xFFB8925A)
 private val BurgundyColor = Color(0xFF7A2525)
 
 private enum class RevealStage { ILLUSTRATION, TEXT, ACTIONS, DONE }
@@ -105,6 +106,18 @@ private suspend fun pausableDelay(totalMs: Long, isPaused: () -> Boolean) {
     }
 }
 
+/**
+ * Экран сцены — страница книги.
+ *
+ * Компоновка:
+ *   - фон: background.png + book_open.png + book_frame.png (через BookPageBackground),
+ *   - контент внутри BookPageContent (правая страница):
+ *       · иллюстрация с рамкой (25% высоты),
+ *       · текст сцены (50%),
+ *       · разделитель,
+ *       · действия (25%),
+ *   - поверх всего: закладки + ресурс (золото).
+ */
 @Composable
 fun SceneScreen(
     scene: Scene,
@@ -169,11 +182,12 @@ fun SceneScreen(
     LaunchedEffect(scene.id, revealSpeed) {
         if (stage == RevealStage.DONE) return@LaunchedEffect
 
-        // Этап 1: иллюстрация.
         stage = RevealStage.ILLUSTRATION
         if (!skipIllustration) {
             coroutineScope {
-                val animJob = launch { illustrationAlpha.animateTo(1f, tween(timing.illustrationFadeMs)) }
+                val animJob = launch {
+                    illustrationAlpha.animateTo(1f, tween(timing.illustrationFadeMs))
+                }
                 val watchJob = launch {
                     snapshotFlow { skipIllustration }.first { it }
                     animJob.cancel()
@@ -185,7 +199,6 @@ fun SceneScreen(
         illustrationAlpha.snapTo(1f)
         delay(PAUSE_AFTER_ILLUSTRATION_MS)
 
-        // Этап 2: текст.
         stage = RevealStage.TEXT
         if (!skipText) {
             val total = displayText.length
@@ -201,7 +214,6 @@ fun SceneScreen(
         revealedChars = displayText.length
         delay(PAUSE_AFTER_TEXT_MS)
 
-        // Этап 3: действия.
         stage = RevealStage.ACTIONS
         if (!skipActions) {
             var i = 0
@@ -216,14 +228,17 @@ fun SceneScreen(
         onRevealComplete()
     }
 
-    // Корневой Box — ловим тап и удержание по всему экрану.
+    // Корневой Box — фон + контент + закладки. Ловим тап по всему экрану.
     Box(
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(scene.id, stage) {
                 if (stage == RevealStage.DONE) return@pointerInput
                 awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    val down = awaitFirstDown(
+                        requireUnconsumed = false,
+                        pass = PointerEventPass.Initial
+                    )
                     val startTime = System.currentTimeMillis()
                     isPaused = true
                     var released = false
@@ -247,102 +262,87 @@ fun SceneScreen(
                 }
             }
     ) {
-        // ---- Слой 0: фон — текстура дерева ----
-        AssetImage(
-            fileName = "background.png",
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
+        // ---- Слой 0-2: фон — дерево, книга, рамка ----
+        BookPageBackground()
 
-        // ---- Слой 1: страница открытой книги ----
-        AssetImage(
-            fileName = "book_open.png",
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit
-        )
+        // ---- Слой 3: контент внутри правой страницы ----
+        BookPageContent {
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Зона 1: иллюстрация (25%)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(0.25f)
+                        .graphicsLayer { alpha = illustrationAlpha.value },
+                    contentAlignment = Alignment.Center
+                ) {
+                    IllustrationWithFrame()
+                }
 
-        // ---- Слой 2: закладки в правом верхнем углу ----
-        BookmarksRow(
+                Spacer(Modifier.height(12.dp))
+
+                // Зона 2: текст сцены (50%)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(0.50f)
+                        .fillMaxSize()
+                ) {
+                    TextArea(
+                        displayText = displayText,
+                        revealedChars = revealedChars,
+                        stage = stage
+                    )
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Разделитель
+                OrnamentalDivider()
+
+                Spacer(Modifier.height(8.dp))
+
+                // Зона 3: действия (25%)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(0.25f)
+                        .fillMaxSize()
+                ) {
+                    ActionsList(
+                        actions = actions,
+                        shownActions = shownActions,
+                        stage = stage,
+                        isNew = { it.id in newActionIds },
+                        isUsed = { it.id in usedActionIds },
+                        costHintFor = costHintFor,
+                        onClick = { onActionClicked(it) }
+                    )
+                }
+            }
+        }
+
+        // ---- Слой 4: закладки и ресурс — поверх всего, в правом верхнем углу ----
+        Row(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .windowInsetsPadding(WindowInsets.safeDrawing)
                 .padding(top = 4.dp, end = 4.dp),
-            onInventory = onOpenInventory,
-            onJournal = onOpenJournal,
-            onMenu = onOpenMainMenu
-        )
-
-        // ---- Слой 3: контент страницы ----
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(start = 110.dp, end = 24.dp, top = 120.dp, bottom = 24.dp)
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+            // Ресурсы (золото) — слева от бордовой закладки.
+            ResourcesDisplay(resources = resources)
 
-            // Зона 1: иллюстрация (25%)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(0.25f)
-                    .graphicsLayer { alpha = illustrationAlpha.value },
-                contentAlignment = Alignment.Center
-            ) {
-                IllustrationWithFrame()
-            }
-
-            Spacer(Modifier.height(10.dp))
-
-            // Зона 2: текст сцены (50%)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(0.50f)
-                    .fillMaxSize()
-            ) {
-                TextArea(
-                    displayText = displayText,
-                    revealedChars = revealedChars,
-                    stage = stage
-                )
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // Разделитель
-            OrnamentalDivider()
-
-            Spacer(Modifier.height(8.dp))
-
-            // Зона 3: действия (25%)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(0.25f)
-                    .fillMaxSize()
-            ) {
-                ActionsList(
-                    actions = actions,
-                    shownActions = shownActions,
-                    stage = stage,
-                    isNew = { it.id in newActionIds },
-                    isUsed = { it.id in usedActionIds },
-                    costHintFor = costHintFor,
-                    onClick = { onActionClicked(it) }
-                )
-            }
+            // Три закладки.
+            BookmarksRow(
+                onInventory = onOpenInventory,
+                onJournal = onOpenJournal,
+                onMenu = onOpenMainMenu
+            )
         }
-
-        // ---- Ресурсы (золото) — под закладками справа ----
-        ResourcesRow(
-            resources = resources,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .padding(top = 132.dp, end = 24.dp)
-        )
     }
 
     // Оверлей броска кубика
@@ -646,13 +646,12 @@ private fun ActionRow(
 
 @Composable
 private fun BookmarksRow(
-    modifier: Modifier = Modifier,
     onInventory: () -> Unit,
     onJournal: () -> Unit,
     onMenu: () -> Unit
 ) {
     Box(
-        modifier = modifier
+        modifier = Modifier
             .height(140.dp)
             .width(170.dp)
     ) {
@@ -698,16 +697,17 @@ private fun BookmarksRow(
     }
 }
 
+/**
+ * Ресурсы (золото) — эмодзи + число. Пока без иконки.
+ * Расположение: слева от бордовой закладки.
+ */
 @Composable
-private fun ResourcesRow(
-    resources: Map<String, GameResource>,
-    modifier: Modifier = Modifier
-) {
+private fun ResourcesDisplay(resources: Map<String, GameResource>) {
     if (resources.isEmpty()) return
 
     Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         resources.values.forEach { resource ->
             Text(

@@ -6,8 +6,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
@@ -17,23 +15,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.interactivebook.app.R
 import com.interactivebook.app.core.model.Information
 import com.interactivebook.app.core.model.InformationType
-import com.interactivebook.app.ui.common.AssetImage
+import com.interactivebook.app.ui.common.BookPageBackground
+import com.interactivebook.app.ui.common.BookPageContent
 
 private val InkColor = Color(0xFF3B2A1A)
 private val InkDimColor = Color(0xFF6B5A44)
-private val GoldColor = Color(0xFFB8925A)
+private val BurgundyColor = Color(0xFF7A2525)
 
 /**
- * Журнал героя — страница книги (book_open.png) с записями поверх.
- * Цели — куда двигаться. Заметки — вольные наблюдения.
- *
- * Визуал позже: страница под заметки будет отдельной (book_notes.png).
+ * Журнал героя — страница книги. Контент внутри BookPageContent.
  */
 @Composable
 fun JournalScreen(
@@ -45,70 +40,53 @@ fun JournalScreen(
     val titleById = information.associateBy({ it.id }, { it.title })
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Слой 0: фон — текстура дерева на весь экран.
-        AssetImage(
-            fileName = "background.png",
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
+        BookPageBackground()
 
-        // Слой 1: книга — вписывается целиком (Fit).
-        AssetImage(
-            fileName = "book_open.png",
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit
-        )
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .padding(start = 118.dp, end = 28.dp, top = 130.dp, bottom = 40.dp)
-        ) {
-            TextButton(onClick = onBack) {
-                Text(stringResource(R.string.back), color = InkDimColor)
-            }
-
-            Text(
-                text = "Заметки",
-                style = MaterialTheme.typography.headlineMedium,
-                color = InkColor
-            )
-            Spacer(Modifier.height(12.dp))
-
-            if (information.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        "Журнал пока пуст",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = InkDimColor
-                    )
+        BookPageContent {
+            Column(modifier = Modifier.fillMaxSize()) {
+                TextButton(onClick = onBack) {
+                    Text(stringResource(R.string.back), color = InkDimColor)
                 }
-                return@Column
-            }
 
-            LazyColumn {
-                if (goals.isNotEmpty()) {
-                    item {
-                        Text("Цели", style = MaterialTheme.typography.titleLarge, color = GoldColor)
-                        Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Заметки",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = InkColor
+                )
+                Spacer(Modifier.height(12.dp))
+
+                if (information.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            "Журнал пока пуст",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = InkDimColor
+                        )
                     }
-                    items(goals, key = { it.id }) { entry ->
-                        JournalEntry(entry, titleById)
-                        Spacer(Modifier.height(10.dp))
-                    }
-                    item { Spacer(Modifier.height(8.dp)) }
+                    return@Column
                 }
-                if (notes.isNotEmpty()) {
-                    item {
-                        Text("Заметки", style = MaterialTheme.typography.titleLarge, color = GoldColor)
-                        Spacer(Modifier.height(6.dp))
+
+                LazyColumn {
+                    if (goals.isNotEmpty()) {
+                        item {
+                            Text("Цели", style = MaterialTheme.typography.titleLarge, color = BurgundyColor)
+                            Spacer(Modifier.height(6.dp))
+                        }
+                        items(goals, key = { it.id }) { entry ->
+                            JournalEntry(entry, titleById)
+                            Spacer(Modifier.height(10.dp))
+                        }
+                        item { Spacer(Modifier.height(8.dp)) }
                     }
-                    items(notes, key = { it.id }) { entry ->
-                        JournalEntry(entry, titleById)
-                        Spacer(Modifier.height(10.dp))
+                    if (notes.isNotEmpty()) {
+                        item {
+                            Text("Заметки", style = MaterialTheme.typography.titleLarge, color = BurgundyColor)
+                            Spacer(Modifier.height(6.dp))
+                        }
+                        items(notes, key = { it.id }) { entry ->
+                            JournalEntry(entry, titleById)
+                            Spacer(Modifier.height(10.dp))
+                        }
                     }
                 }
             }
@@ -123,7 +101,7 @@ private fun JournalEntry(entry: Information, titleById: Map<String, String>) {
             Text(
                 text = entry.topic.uppercase(),
                 style = MaterialTheme.typography.labelLarge,
-                color = GoldColor
+                color = BurgundyColor
             )
             Spacer(Modifier.height(2.dp))
         }

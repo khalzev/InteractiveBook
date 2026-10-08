@@ -1,7 +1,9 @@
 package com.interactivebook.app
 
+import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.clickable
@@ -31,12 +33,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.interactivebook.app.content.scenes.DemoContent
+import com.interactivebook.app.core.effects.Effect
 import com.interactivebook.app.core.model.Action
 import com.interactivebook.app.ui.character.CharacterCreationScreen
 import com.interactivebook.app.ui.common.AssetImage
 import com.interactivebook.app.ui.common.BookVideoPlayer
 import com.interactivebook.app.ui.common.GameViewModel
-import com.interactivebook.app.ui.common.PageTurnOverlay
+import com.interactivebook.app.ui.common.PageTurnTransition
 import com.interactivebook.app.ui.common.PartTitleScreen
 import com.interactivebook.app.ui.inventory.InventoryScreen
 import com.interactivebook.app.ui.journal.JournalScreen
@@ -59,7 +62,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+
+        // Прозрачные системные бары.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(
+                lightScrim = AndroidColor.TRANSPARENT,
+                darkScrim = AndroidColor.TRANSPARENT
+            ),
+            navigationBarStyle = SystemBarStyle.auto(
+                lightScrim = AndroidColor.TRANSPARENT,
+                darkScrim = AndroidColor.TRANSPARENT
+            )
+        )
+
         setContent {
             InteractiveBookTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -140,6 +155,13 @@ private fun ClosedBookScreen(onContinue: () -> Unit) {
             contentScale = ContentScale.Fit
         )
 
+        AssetImage(
+            fileName = "book_frame.png",
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Fit
+        )
+
         if (showHint) {
             Text(
                 text = stringResource(R.string.intro_tap_to_continue),
@@ -161,11 +183,8 @@ private fun InteractiveBookNavHost(
     pendingCharacterCreationAction: Action?,
     setPendingCharacterCreationAction: (Action?) -> Unit
 ) {
-    // Замыкание — что делать после перелистывания. null = перелистывания нет.
     var pendingNavigation by remember { mutableStateOf<(() -> Unit)?>(null) }
 
-    // Обёртка: если перелистывание включено — показать оверлей и потом выполнить action.
-    // Если выключено — сразу action().
     fun withPageTurn(action: () -> Unit) {
         if (viewModel.pageTurnEnabled) {
             pendingNavigation = action
@@ -228,7 +247,9 @@ private fun InteractiveBookNavHost(
                 if (showingPartTitle && scene.partTitle != null) {
                     PartTitleScreen(
                         partTitle = scene.partTitle,
-                        onContinue = { showingPartTitle = false }
+                        onContinue = {
+                            withPageTurn { showingPartTitle = false }
+                        }
                     )
                 } else {
                     SceneScreen(
@@ -242,10 +263,29 @@ private fun InteractiveBookNavHost(
                         revealedAlready = viewModel.isSceneRevealed(scene.id),
                         revealSpeed = viewModel.revealSpeed,
                         onRevealComplete = { viewModel.markSceneRevealed(scene.id) },
-                        onSimpleAction = { action -> viewModel.performAction(action) },
+                        onSimpleAction = { action ->
+                            val currentSceneId = viewModel.gameState?.currentSceneId
+                            val hasTransition = action.effects.any {
+                                it is Effect.Transition && it.sceneId != currentSceneId
+                            }
+                            if (hasTransition) {
+                                withPageTurn { viewModel.performAction(action) }
+                            } else {
+                                viewModel.performAction(action)
+                            }
+                        },
                         onResolveCheck = { action -> viewModel.resolveCheck(action) },
                         onApplyCheckOutcome = { action, outcome ->
-                            viewModel.applyCheckOutcome(action, outcome)
+                            val currentSceneId = viewModel.gameState?.currentSceneId
+                            val effects = viewModel.outcomeEffects(action, outcome)
+                            val hasTransition = effects.any {
+                                it is Effect.Transition && it.sceneId != currentSceneId
+                            }
+                            if (hasTransition) {
+                                withPageTurn { viewModel.applyCheckOutcome(action, outcome) }
+                            } else {
+                                viewModel.applyCheckOutcome(action, outcome)
+                            }
                         },
                         onTriggerCharacterCreation = { action ->
                             setPendingCharacterCreationAction(action)
@@ -307,11 +347,9 @@ private fun InteractiveBookNavHost(
             }
         }
 
-        // Оверлей перелистывания — поверх NavHost.
-        // Когда pendingNavigation задан — проигрывается видео, потом выполняется действие.
+        // Универсальный оверлей перехода.
         pendingNavigation?.let { action ->
-            PageTurnOverlay(
-                enabled = true,
+            PageTurnTransition(
                 onFinished = {
                     val a = pendingNavigation
                     pendingNavigation = null

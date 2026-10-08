@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,15 +32,11 @@ private const val HINT_DELAY_MS = 600L
 private val HintColor = Color(0xFF6B5A44)
 
 /**
- * Экран титула части — страница книги (book_open.png) поверх фоновой текстуры
- * дерева (background.png). Вместо текстовой анимации — две картинки:
- *
+ * Экран титула части — страница книги с двумя картинками:
  *   1. chapterImage — название главы (например "chapter_title.png"),
- *      показывается сверху.
- *   2. partImage — название части (например "part_title_prologue.png"),
- *      показывается ниже.
+ *   2. partImage — название части (например "part_title_prologue.png").
  *
- * Подсказка «Нажмите на экран» появляется с задержкой. Тап по экрану — переход дальше.
+ * Контент лежит внутри BookPageContent — то есть внутри правой страницы книги.
  */
 @Composable
 fun PartTitleScreen(partTitle: PartTitle, onContinue: () -> Unit) {
@@ -55,81 +50,67 @@ fun PartTitleScreen(partTitle: PartTitle, onContinue: () -> Unit) {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Слой 0: фон — текстура дерева.
-        AssetImage(
-            fileName = "background.png",
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
+        // Фон: дерево + книга + рамка.
+        BookPageBackground()
 
-        // Слой 1: книга — вписывается целиком.
-        AssetImage(
-            fileName = "book_open.png",
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit
-        )
-
-        // Слой 2: две картинки титула — глава + часть — с обработкой тапа по всему экрану.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .then(
-                    if (readyToContinue) {
-                        Modifier.clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = onContinue
-                        )
-                    } else Modifier
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
+        // Контент внутри правой страницы.
+        BookPageContent {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 118.dp, end = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxSize()
+                    .then(
+                        if (readyToContinue) {
+                            Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = onContinue
+                            )
+                        } else Modifier
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                // Картинка главы (например "Глава 1, Город у реки").
-                partTitle.chapterImage?.let { image ->
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Картинка главы.
+                    partTitle.chapterImage?.let { image ->
+                        AssetImage(
+                            fileName = image,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(140.dp),
+                            contentScale = ContentScale.Fit
+                        )
+                        Spacer(Modifier.height(24.dp))
+                    }
+
+                    // Картинка части.
                     AssetImage(
-                        fileName = image,
+                        fileName = partTitle.partImage,
                         contentDescription = null,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(140.dp),
+                            .height(160.dp),
                         contentScale = ContentScale.Fit
                     )
-                    Spacer(Modifier.height(20.dp))
                 }
-
-                // Картинка части (например "Пролог" или "Дело первое: ...").
-                AssetImage(
-                    fileName = partTitle.partImage,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(160.dp),
-                    contentScale = ContentScale.Fit
-                )
             }
         }
 
-        // Слой 3: подсказка внизу.
+        // Подсказка внизу (вне страницы — на фоне).
         AnimatedVisibility(
             visible = hintVisible,
             enter = fadeIn(),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 56.dp)
+                .padding(bottom = 40.dp)
         ) {
             Text(
                 text = "Нажмите на экран",
                 style = MaterialTheme.typography.labelLarge,
-                color = HintColor
+                color = Color(0xFFE8DBC0)
             )
         }
     }

@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -24,22 +23,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.interactivebook.app.R
 import com.interactivebook.app.core.settings.RevealSpeed
-import com.interactivebook.app.ui.common.AssetImage
+import com.interactivebook.app.ui.common.BookPageBackground
+import com.interactivebook.app.ui.common.BookPageContent
 
 private val InkColor = Color(0xFF3B2A1A)
 private val InkDimColor = Color(0xFF6B5A44)
 
 /**
- * Настройки — страница книги с текстом поверх.
- *
- * Настройки:
- *  - Скорость появления сцены (INSTANT / FAST / SLOW).
- *  - Перелистывание страниц (Вкл / Выкл).
+ * Настройки — страница книги. Контент внутри BookPageContent (правая страница).
  */
 @Composable
 fun SettingsScreen(
@@ -50,110 +45,96 @@ fun SettingsScreen(
     onBack: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
-        // Слой 0: фон — текстура дерева на весь экран.
-        AssetImage(
-            fileName = "background.png",
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
+        BookPageBackground()
 
-        // Слой 1: книга — вписывается целиком (Fit).
-        AssetImage(
-            fileName = "book_open.png",
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit
-        )
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .padding(start = 118.dp, end = 28.dp, top = 130.dp, bottom = 40.dp)
-                .verticalScroll(rememberScrollState())
-        ) {
-            TextButton(onClick = onBack) {
-                Text(stringResource(R.string.back), color = InkDimColor)
-            }
-
-            Text(
-                text = stringResource(R.string.settings_title),
-                style = MaterialTheme.typography.headlineMedium,
-                color = InkColor
-            )
-            Spacer(Modifier.height(20.dp))
-
-            // --- Скорость появления сцены ---
-            Text(
-                text = stringResource(R.string.settings_reveal_speed_title),
-                style = MaterialTheme.typography.titleLarge,
-                color = InkColor
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.settings_reveal_speed_description),
-                style = MaterialTheme.typography.bodyLarge,
-                color = InkDimColor
-            )
-            Spacer(Modifier.height(10.dp))
-
-            RevealSpeedRow(
-                label = stringResource(R.string.settings_reveal_instant),
-                desc = stringResource(R.string.settings_reveal_instant_desc),
-                selected = revealSpeed == RevealSpeed.INSTANT,
-                onSelect = { onRevealSpeedChange(RevealSpeed.INSTANT) }
-            )
-            RevealSpeedRow(
-                label = stringResource(R.string.settings_reveal_fast),
-                desc = stringResource(R.string.settings_reveal_fast_desc),
-                selected = revealSpeed == RevealSpeed.FAST,
-                onSelect = { onRevealSpeedChange(RevealSpeed.FAST) }
-            )
-            RevealSpeedRow(
-                label = stringResource(R.string.settings_reveal_slow),
-                desc = stringResource(R.string.settings_reveal_slow_desc),
-                selected = revealSpeed == RevealSpeed.SLOW,
-                onSelect = { onRevealSpeedChange(RevealSpeed.SLOW) }
-            )
-
-            Spacer(Modifier.height(24.dp))
-
-            // --- Перелистывание страниц ---
-            Text(
-                text = stringResource(R.string.settings_page_turn_title),
-                style = MaterialTheme.typography.titleLarge,
-                color = InkColor
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.settings_page_turn_description),
-                style = MaterialTheme.typography.bodyLarge,
-                color = InkDimColor
-            )
-            Spacer(Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+        BookPageContent {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
             ) {
+                TextButton(onClick = onBack) {
+                    Text(stringResource(R.string.back), color = InkDimColor)
+                }
+
                 Text(
-                    text = if (pageTurnEnabled) {
-                        stringResource(R.string.settings_page_turn_on)
-                    } else {
-                        stringResource(R.string.settings_page_turn_off)
-                    },
+                    text = stringResource(R.string.settings_title),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = InkColor
+                )
+                Spacer(Modifier.height(20.dp))
+
+                // --- Скорость появления сцены ---
+                Text(
+                    text = stringResource(R.string.settings_reveal_speed_title),
                     style = MaterialTheme.typography.titleLarge,
                     color = InkColor
                 )
-                Switch(
-                    checked = pageTurnEnabled,
-                    onCheckedChange = onPageTurnChange
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.settings_reveal_speed_description),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = InkDimColor
                 )
-            }
+                Spacer(Modifier.height(10.dp))
 
-            Spacer(Modifier.height(40.dp))
+                RevealSpeedRow(
+                    label = stringResource(R.string.settings_reveal_instant),
+                    desc = stringResource(R.string.settings_reveal_instant_desc),
+                    selected = revealSpeed == RevealSpeed.INSTANT,
+                    onSelect = { onRevealSpeedChange(RevealSpeed.INSTANT) }
+                )
+                RevealSpeedRow(
+                    label = stringResource(R.string.settings_reveal_fast),
+                    desc = stringResource(R.string.settings_reveal_fast_desc),
+                    selected = revealSpeed == RevealSpeed.FAST,
+                    onSelect = { onRevealSpeedChange(RevealSpeed.FAST) }
+                )
+                RevealSpeedRow(
+                    label = stringResource(R.string.settings_reveal_slow),
+                    desc = stringResource(R.string.settings_reveal_slow_desc),
+                    selected = revealSpeed == RevealSpeed.SLOW,
+                    onSelect = { onRevealSpeedChange(RevealSpeed.SLOW) }
+                )
+
+                Spacer(Modifier.height(24.dp))
+
+                // --- Перелистывание страниц ---
+                Text(
+                    text = stringResource(R.string.settings_page_turn_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = InkColor
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.settings_page_turn_description),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = InkDimColor
+                )
+                Spacer(Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = if (pageTurnEnabled) {
+                            stringResource(R.string.settings_page_turn_on)
+                        } else {
+                            stringResource(R.string.settings_page_turn_off)
+                        },
+                        style = MaterialTheme.typography.titleLarge,
+                        color = InkColor
+                    )
+                    Switch(
+                        checked = pageTurnEnabled,
+                        onCheckedChange = onPageTurnChange
+                    )
+                }
+
+                Spacer(Modifier.height(40.dp))
+            }
         }
     }
 }

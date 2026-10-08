@@ -1,6 +1,5 @@
 package com.interactivebook.app.ui.inventory
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
@@ -25,7 +23,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.interactivebook.app.R
@@ -36,15 +33,15 @@ import com.interactivebook.app.core.model.Action
 import com.interactivebook.app.core.model.GameResource
 import com.interactivebook.app.core.model.Item
 import com.interactivebook.app.ui.check.CheckRollOverlay
-import com.interactivebook.app.ui.common.AssetImage
+import com.interactivebook.app.ui.common.BookPageBackground
+import com.interactivebook.app.ui.common.BookPageContent
 
 private val InkColor = Color(0xFF3B2A1A)
 private val InkDimColor = Color(0xFF6B5A44)
-private val GoldColor = Color(0xFFB8925A)
+private val BurgundyColor = Color(0xFF7A2525)
 
 /**
- * Инвентарь — страница книги (book_open.png) со списком предметов.
- * Визуал позже: страница под инвентарь будет отдельной (book_inventory.png).
+ * Инвентарь — страница книги. Контент внутри BookPageContent.
  */
 @Composable
 fun InventoryScreen(
@@ -73,67 +70,50 @@ fun InventoryScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Слой 0: фон — текстура дерева на весь экран.
-        AssetImage(
-            fileName = "background.png",
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
+        BookPageBackground()
 
-        // Слой 1: книга — вписывается целиком (Fit).
-        AssetImage(
-            fileName = "book_open.png",
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit
-        )
+        BookPageContent {
+            Column(modifier = Modifier.fillMaxSize()) {
+                TextButton(onClick = onBack) {
+                    Text(stringResource(R.string.back), color = InkDimColor)
+                }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .padding(start = 118.dp, end = 28.dp, top = 130.dp, bottom = 40.dp)
-        ) {
-            TextButton(onClick = onBack) {
-                Text(stringResource(R.string.back), color = InkDimColor)
-            }
+                Text(
+                    text = "Инвентарь",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = InkColor
+                )
+                Spacer(Modifier.height(12.dp))
 
-            Text(
-                text = "Инвентарь",
-                style = MaterialTheme.typography.headlineMedium,
-                color = InkColor
-            )
-            Spacer(Modifier.height(12.dp))
+                if (resources.isNotEmpty()) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        resources.values.forEach { resource ->
+                            Text(
+                                text = "${resourceIcon(resource.id)} ${resource.name}: ${resource.currentValue}",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = InkColor
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(16.dp))
+                }
 
-            if (resources.isNotEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    resources.values.forEach { resource ->
+                if (items.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text(
-                            text = "${resourceIcon(resource.id)} ${resource.name}: ${resource.currentValue}",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = InkColor
+                            "Пока пусто",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = InkDimColor
                         )
                     }
-                }
-                Spacer(Modifier.height(16.dp))
-            }
-
-            if (items.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        "Пока пусто",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = InkDimColor
-                    )
-                }
-            } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(items, key = { it.id }) { item ->
-                        val examinable = examineActionFor(item) != null
-                        ItemRow(item = item, examinable = examinable, onClick = {
-                            if (examinable) examine(item)
-                        })
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        items(items, key = { it.id }) { item ->
+                            val examinable = examineActionFor(item) != null
+                            ItemRow(item = item, examinable = examinable, onClick = {
+                                if (examinable) examine(item)
+                            })
+                        }
                     }
                 }
             }
@@ -164,7 +144,7 @@ private fun ItemRow(item: Item, examinable: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             text = "◆",
-            color = GoldColor,
+            color = BurgundyColor,
             style = MaterialTheme.typography.labelLarge,
             modifier = Modifier.padding(end = 10.dp)
         )
@@ -185,7 +165,7 @@ private fun ItemRow(item: Item, examinable: Boolean, onClick: () -> Unit) {
                 Text(
                     text = "Рассмотреть",
                     style = MaterialTheme.typography.labelLarge,
-                    color = GoldColor
+                    color = BurgundyColor
                 )
             }
         }
