@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -105,11 +106,11 @@ fun PartTitleScreen(partTitle: PartTitle, onContinue: () -> Unit) {
             enter = fadeIn(),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 40.dp)
+                .padding(bottom = 105.dp)
         ) {
             Text(
-                text = "Нажмите на экран",
-                style = MaterialTheme.typography.labelLarge,
+                text = "Нажмите для продолжения",
+                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 20.sp),
                 color = Color(0xFFE8DBC0)
             )
         }

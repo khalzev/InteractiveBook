@@ -4,6 +4,7 @@ import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.compose.ui.unit.sp
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.clickable
@@ -27,6 +28,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.interactivebook.app.ui.common.BookPageBackground
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -63,17 +65,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Прозрачные системные бары.
+        // Прозрачные системные бары — и верхний, и нижний.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(
                 lightScrim = AndroidColor.TRANSPARENT,
                 darkScrim = AndroidColor.TRANSPARENT
             ),
-            navigationBarStyle = SystemBarStyle.auto(
-                lightScrim = AndroidColor.TRANSPARENT,
-                darkScrim = AndroidColor.TRANSPARENT
-            )
+            navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT)
         )
+        window.isNavigationBarContrastEnforced = false
 
         setContent {
             InteractiveBookTheme {
@@ -141,13 +141,10 @@ private fun ClosedBookScreen(onContinue: () -> Unit) {
             .fillMaxSize()
             .clickable(onClick = onContinue)
     ) {
-        AssetImage(
-            fileName = "background.png",
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
+        // Холст: дерево + книга + рамка.
+        BookPageBackground()
 
+        // Закрытая книга поверх холста.
         AssetImage(
             fileName = "book_closed.png",
             contentDescription = null,
@@ -155,21 +152,14 @@ private fun ClosedBookScreen(onContinue: () -> Unit) {
             contentScale = ContentScale.Fit
         )
 
-        AssetImage(
-            fileName = "book_frame.png",
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit
-        )
-
         if (showHint) {
             Text(
-                text = stringResource(R.string.intro_tap_to_continue),
-                style = MaterialTheme.typography.labelLarge,
+                text = "Нажмите для продолжения",
+                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 20.sp),
                 color = Color(0xFFE8DBC0),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 56.dp)
+                    .padding(bottom = 105.dp)
             )
         }
     }
@@ -234,7 +224,9 @@ private fun InteractiveBookNavHost(
             composable(ROUTE_SCENE) {
                 val scene = viewModel.currentScene() ?: DemoContent.startingScene
                 var showingPartTitle by rememberSaveable(scene.id) {
-                    mutableStateOf(scene.partTitle != null)
+                    mutableStateOf(
+                        scene.partTitle != null && !viewModel.isPartTitleShown(scene.id)
+                    )
                 }
 
                 val newActionIds = remember(scene.id) { viewModel.newlyAvailableActionIds(scene) }
@@ -248,6 +240,7 @@ private fun InteractiveBookNavHost(
                     PartTitleScreen(
                         partTitle = scene.partTitle,
                         onContinue = {
+                            viewModel.markPartTitleShown(scene.id)
                             withPageTurn { showingPartTitle = false }
                         }
                     )
@@ -260,6 +253,8 @@ private fun InteractiveBookNavHost(
                         usedActionIds = usedActionIds,
                         costHintFor = { action -> viewModel.costHintFor(action) },
                         resources = viewModel.gameState?.resources ?: emptyMap(),
+                        resourcesEverSeen = viewModel.resourcesEverSeen,
+                        onResourceSeen = { viewModel.markResourceSeen(it) },
                         revealedAlready = viewModel.isSceneRevealed(scene.id),
                         revealSpeed = viewModel.revealSpeed,
                         onRevealComplete = { viewModel.markSceneRevealed(scene.id) },

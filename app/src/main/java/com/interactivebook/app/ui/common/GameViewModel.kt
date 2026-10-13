@@ -43,6 +43,20 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     /** Настройка: перелистывание страниц. По умолчанию — включено. */
     var pageTurnEnabled by mutableStateOf(true)
         private set
+    /**
+     * ID ресурсов, анимация появления которых УЖЕ БЫЛА показана игроку в этой
+     * игровой сессии. При первом появлении ресурса (например, золота в Деле
+     * первом) — проигрывается анимация "0 → N". Повторно не проигрывается.
+     * Сбрасывается при New Game.
+     */
+    var resourcesEverSeen by mutableStateOf<Set<String>>(emptySet())
+        private set
+
+    fun markResourceSeen(resourceId: String) {
+        if (resourceId !in resourcesEverSeen) {
+            resourcesEverSeen = resourcesEverSeen + resourceId
+        }
+    }
 
     fun updateRevealSpeed(speed: RevealSpeed) {
         revealSpeed = speed
@@ -90,6 +104,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun startNewGame() {
         revealedSceneId = null
+        resourcesEverSeen = emptySet()
         val newState = GameState.newGame(
             startingSceneId = DemoContent.startingScene.id,
             startingLocationId = DemoContent.startingScene.locationId
@@ -218,4 +233,17 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun outcomeEffects(action: Action, outcome: CheckOutcome): List<Effect> =
         engine.effectsForOutcome(action, outcome)
+
+    /** Помечает сцену как "титул уже показан". */
+    fun markPartTitleShown(sceneId: String) {
+        val state = gameState ?: return
+        if (sceneId in state.shownPartTitleSceneIds) return
+        updateState(state.copy(shownPartTitleSceneIds = state.shownPartTitleSceneIds + sceneId))
+    }
+
+    /** Проверяет — показывался ли уже титул этой сцены. */
+    fun isPartTitleShown(sceneId: String): Boolean {
+        val state = gameState ?: return false
+        return sceneId in state.shownPartTitleSceneIds
+    }
 }

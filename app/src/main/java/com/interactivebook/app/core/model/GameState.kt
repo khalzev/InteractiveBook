@@ -33,11 +33,11 @@ data class GameState(
     // подсвечивается в UI (см. GameViewModel.newlyAvailableActionIds).
     val seenActionsByScene: Map<String, Set<String>> = emptyMap(),
 
-    // ID действий, которые игрок уже РЕАЛЬНО НАЖИМАЛ в каждой сцене (ключ — Scene.id).
-    // Используется, чтобы визуально помечать пройденные действия (галочка + приглушение),
-    // чтобы игрок не ходил по кругу одних и тех же реплик. Отличается от seenActionsByScene:
-    // там — то, что игрок видел; здесь — то, что он выбрал.
-    val usedActionsByScene: Map<String, Set<String>> = emptyMap()
+    val usedActionsByScene: Map<String, Set<String>> = emptyMap(),
+
+    // ID сцен, у которых УЖЕ БЫЛ показан титул части (partTitle). Чтобы титул
+    // не показывался повторно при возврате в ту же сцену.
+    val shownPartTitleSceneIds: Set<String> = emptySet()
 ) {
     companion object {
         /** Пустое состояние для новой игры (раздел 69 — New Game сбрасывает GameState). */

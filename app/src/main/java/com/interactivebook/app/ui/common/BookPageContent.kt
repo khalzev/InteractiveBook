@@ -3,64 +3,85 @@ package com.interactivebook.app.ui.common
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import kotlin.math.max
+import kotlin.math.roundToInt
+
+// ---------- Размеры холста book_page.png ----------
+private const val CANVAS_W = 3200f
+private const val CANVAS_H = 3000f
+
+// ---------- Координаты книги (открытой) на холсте ----------
+private const val BOOK_LEFT_PX = 1130f
+private const val BOOK_RIGHT_PX = 2039f
+private const val BOOK_TOP_PX = 659f
+private const val BOOK_BOTTOM_PX = 2330f
+
+// ---------- Координаты правой страницы (внутри книги) на холсте ----------
+private const val PAGE_LEFT_PX = 1211f
+private const val PAGE_RIGHT_PX = 1984f
+private const val PAGE_TOP_PX = 805f
+private const val PAGE_BOTTOM_PX = 2154f
+
+// ---------- Сдвиг содержимого вправо ----------
+// Доля от ширины экрана. Нужна, чтобы правая линия рамки ушла за край экрана.
+private const val SHIFT_RIGHT_FRACTION = 0.015f
+
+/** Порог: экран < 600 dp — считаем телефоном. */
+private val PHONE_WIDTH_THRESHOLD = 600.dp
+
+private fun computeZoom(screenW: Float, screenH: Float, isPhone: Boolean): Float {
+    if (!isPhone) return 1f
+    val cropScale = max(screenW / CANVAS_W, screenH / CANVAS_H)
+    val bookWidthOnScreen = (BOOK_RIGHT_PX - BOOK_LEFT_PX) * cropScale
+    return if (bookWidthOnScreen < screenW) screenW / bookWidthOnScreen else 1f
+}
 
 /**
- * Доли от изображения book_open.png (941 × 1672):
- *   границы правой страницы книги — куда ложится весь контент.
+ * Фоновая подложка: book_page.png (дерево + книга + рамка).
+ * На телефоне — зум так, чтобы книга заполнила ширину, плюс сдвиг вправо.
  */
-private const val PAGE_LEFT_FRACTION = 0.085f
-private const val PAGE_RIGHT_FRACTION = 0.903f
-private const val PAGE_TOP_FRACTION = 0.084f
-private const val PAGE_BOTTOM_FRACTION = 0.891f
+@Composable
+fun BookPageBackground(modifier: Modifier = Modifier) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val density = LocalDensity.current
+        val screenW = with(density) { maxWidth.toPx() }
+        val screenH = with(density) { maxHeight.toPx() }
+        val isPhone = maxWidth < PHONE_WIDTH_THRESHOLD
+        val zoom = computeZoom(screenW, screenH, isPhone)
 
-/** Соотношение сторон изображения book_open.png: 941 / 1672. */
-private const val BOOK_IMAGE_RATIO = 941f / 1672f
-
-private data class BookRect(
-    val widthPx: Float,
-    val heightPx: Float,
-    val offsetXPx: Float,
-    val offsetYPx: Float
-)
-
-private fun computeBookRect(screenWidthPx: Float, screenHeightPx: Float): BookRect {
-    val screenRatio = screenWidthPx / screenHeightPx
-    return if (screenRatio > BOOK_IMAGE_RATIO) {
-        // Экран шире книги — книга вписывается по высоте.
-        val h = screenHeightPx
-        val w = h * BOOK_IMAGE_RATIO
-        BookRect(
-            widthPx = w,
-            heightPx = h,
-            offsetXPx = (screenWidthPx - w) / 2f,
-            offsetYPx = 0f
-        )
-    } else {
-        // Экран уже книги — книга вписывается по ширине.
-        val w = screenWidthPx
-        val h = w / BOOK_IMAGE_RATIO
-        BookRect(
-            widthPx = w,
-            heightPx = h,
-            offsetXPx = 0f,
-            offsetYPx = (screenHeightPx - h) / 2f
-        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = zoom
+                    scaleY = zoom
+                    translationX = screenW * SHIFT_RIGHT_FRACTION
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            AssetImage(
+                fileName = "book_page.png",
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
     }
 }
 
 /**
- * Контейнер, который размещает контент ВНУТРИ правой страницы книги book_open.png.
- *
- * Работает так:
- *  1. BoxWithConstraints измеряет область.
- *  2. Вычисляет, как ляжет картинка книги при ContentScale.Fit.
- *  3. Внутри этой области находит прямоугольник правой страницы.
- *  4. Размещает content внутри этого прямоугольника.
+ * Контейнер, который размещает контент ВНУТРИ правой страницы книги
+ * на холсте book_page.png (с учётом Crop, зума и сдвига вправо).
  */
 @Composable
 fun BookPageContent(
@@ -69,63 +90,36 @@ fun BookPageContent(
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val density = LocalDensity.current
+        val screenW = with(density) { maxWidth.toPx() }
+        val screenH = with(density) { maxHeight.toPx() }
+        val isPhone = maxWidth < PHONE_WIDTH_THRESHOLD
+        val zoom = computeZoom(screenW, screenH, isPhone)
 
-        val screenWidthPx = with(density) { maxWidth.toPx() }
-        val screenHeightPx = with(density) { maxHeight.toPx() }
+        val scale = max(screenW / CANVAS_W, screenH / CANVAS_H) * zoom
 
-        val bookRect = computeBookRect(screenWidthPx, screenHeightPx)
+        val drawnW = CANVAS_W * scale
+        val drawnH = CANVAS_H * scale
+        val offsetX = (screenW - drawnW) / 2f + screenW * SHIFT_RIGHT_FRACTION
+        val offsetY = (screenH - drawnH) / 2f
 
-        val pageLeftPx = bookRect.offsetXPx + bookRect.widthPx * PAGE_LEFT_FRACTION
-        val pageRightPx = bookRect.offsetXPx + bookRect.widthPx * PAGE_RIGHT_FRACTION
-        val pageTopPx = bookRect.offsetYPx + bookRect.heightPx * PAGE_TOP_FRACTION
-        val pageBottomPx = bookRect.offsetYPx + bookRect.heightPx * PAGE_BOTTOM_FRACTION
+        val pageLeft = offsetX + PAGE_LEFT_PX * scale
+        val pageTop = offsetY + PAGE_TOP_PX * scale
+        val pageRight = offsetX + PAGE_RIGHT_PX * scale
+        val pageBottom = offsetY + PAGE_BOTTOM_PX * scale
 
-        val paddingStartDp = with(density) { pageLeftPx.toDp() }
-        val paddingEndDp = with(density) { (screenWidthPx - pageRightPx).toDp() }
-        val paddingTopDp = with(density) { pageTopPx.toDp() }
-        val paddingBottomDp = with(density) { (screenHeightPx - pageBottomPx).toDp() }
+        val pageWidthDp = with(density) { (pageRight - pageLeft).toDp() }
+        val pageHeightDp = with(density) { (pageBottom - pageTop).toDp() }
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(
-                    start = paddingStartDp,
-                    end = paddingEndDp,
-                    top = paddingTopDp,
-                    bottom = paddingBottomDp
-                )
-        ) {
-            content()
+        Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .offset {
+                        IntOffset(pageLeft.roundToInt(), pageTop.roundToInt())
+                    }
+                    .size(width = pageWidthDp, height = pageHeightDp)
+            ) {
+                content()
+            }
         }
-    }
-}
-
-/**
- * Фоновая подложка для всех экранов "страницы книги":
- *   слой 0 — background.png (дерево),
- *   слой 1 — book_open.png (книга, Fit),
- *   слой 2 — book_frame.png (декоративная рамка).
- */
-@Composable
-fun BookPageBackground(modifier: Modifier = Modifier) {
-    Box(modifier = modifier.fillMaxSize()) {
-        AssetImage(
-            fileName = "background.png",
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
-        AssetImage(
-            fileName = "book_open.png",
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit
-        )
-        AssetImage(
-            fileName = "book_frame.png",
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit
-        )
     }
 }

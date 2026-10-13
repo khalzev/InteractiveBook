@@ -30,6 +30,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +38,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
@@ -52,14 +55,6 @@ import com.interactivebook.app.core.model.Stats
 
 private const val ADVENTURER_SKILL_COUNT = 2
 
-/**
- * Мастер создания персонажа (разделы 9-15), 3 шага — или 4, если выбран Приключенец:
- * 1) класс (карусель по кругу, без бонусов)
- * 2) пол (с характеристиками и навыками класса)
- * 3) [только для Приключенца] выбор 2 навыков — отдельный шаг
- * 4) имя/фамилия
- * Далее — вступительная сцена игры (game_intro в DemoContent).
- */
 private sealed interface CreationStep {
     data object ClassSelect : CreationStep
     data class GenderSelect(val archetype: Archetype) : CreationStep
@@ -70,6 +65,15 @@ private sealed interface CreationStep {
 @Composable
 fun CharacterCreationScreen(onCharacterReady: (Character) -> Unit) {
     var step by remember { mutableStateOf<CreationStep>(CreationStep.ClassSelect) }
+
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+
+    // При каждой смене шага — прячем клавиатуру и сбрасываем фокус.
+    LaunchedEffect(step) {
+        focusManager.clearFocus()
+        keyboardController?.hide()
+    }
 
     when (val current = step) {
         is CreationStep.ClassSelect -> ClassCarouselStep(
@@ -103,6 +107,10 @@ fun CharacterCreationScreen(onCharacterReady: (Character) -> Unit) {
                 }
             },
             onComplete = { firstName, lastName ->
+                // Принудительно скрываем клавиатуру перед переходом к сцене.
+                focusManager.clearFocus()
+                keyboardController?.hide()
+
                 val info = ArchetypeCatalog.infoFor(current.archetype)
                 onCharacterReady(
                     Character(
@@ -136,8 +144,6 @@ private fun StepHeader(title: String, subtitle: String, onBack: (() -> Unit)? = 
 private fun ClassCarouselStep(onNext: (Archetype) -> Unit) {
     val archetypes = ArchetypeCatalog.all
     val pageCount = archetypes.size
-    // Виртуально огромное число страниц + индекс по модулю реального количества классов —
-    // так карусель крутится по кругу в обе стороны без начала и конца.
     val startPage = remember { (Int.MAX_VALUE / 2 / pageCount) * pageCount }
     val pagerState = rememberPagerState(initialPage = startPage, pageCount = { Int.MAX_VALUE })
 
@@ -150,8 +156,6 @@ private fun ClassCarouselStep(onNext: (Archetype) -> Unit) {
     ) {
         StepHeader(title = "Выберите класс", subtitle = "Класс персонажа")
 
-        // contentPadding оставляет по бокам видимые "срезы" соседних карточек —
-        // ощущение кругового пролистывания, как и просили.
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
@@ -208,7 +212,7 @@ private fun ClassCarouselStep(onNext: (Archetype) -> Unit) {
     }
 }
 
-// ---------- Шаг 2: пол (с бонусами) ----------
+// ---------- Шаг 2: пол ----------
 
 @Composable
 private fun GenderSelectStep(
@@ -308,7 +312,7 @@ private fun GenderCard(
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = "Сила ${statLabel(stats.strength)} · Ловкость ${statLabel(stats.agility)} · " +
-                        "Интеллект ${statLabel(stats.intellect)}",
+                            "Интеллект ${statLabel(stats.intellect)}",
                     style = MaterialTheme.typography.bodyLarge
                 )
                 Text(
@@ -474,7 +478,6 @@ private fun skillDescription(skill: SkillType): String = when (skill) {
     SkillType.OBSERVATION -> "+3 к проверкам наблюдательности"
 }
 
-// Пока нет иллюстраций (раздел 81) — эмодзи как плейсхолдер образа класса.
 private fun archetypeEmoji(archetype: Archetype): String = when (archetype) {
     Archetype.VETERAN -> "⚔️"
     Archetype.DETECTIVE -> "🔍"

@@ -1,6 +1,8 @@
 package com.interactivebook.app.ui.common
 
 import android.net.Uri
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -8,9 +10,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
@@ -19,15 +24,11 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 
 /**
- * Проигрывает видео из assets/ui/ на весь экран.
+ * Проигрывает видео из assets/ui/ поверх холста book_page.png.
  *
- * Слои:
- *   0. background.png — текстура дерева.
- *   1. видео (Fit) — вписывается целиком.
- *   2. book_frame.png — декоративная рамка поверх видео.
- *   3. (опционально) прозрачный слой для тапа, если allowSkip = true.
- *
- * Видео без звука (volume = 0). По окончании — onFinished().
+ * Всегда блокирует тапы по экрану во время проигрывания.
+ * Если allowSkip = true — тап пропускает видео.
+ * Если allowSkip = false — тап игнорируется.
  */
 @Composable
 fun BookVideoPlayer(
@@ -64,12 +65,18 @@ fun BookVideoPlayer(
         }
     }
 
+    var firstFrameRendered by remember(fileName) { mutableStateOf(false) }
+    val fadeIn = remember(fileName) { Animatable(0f) }
+
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) {
                     onFinished()
                 }
+            }
+            override fun onRenderedFirstFrame() {
+                firstFrameRendered = true
             }
         }
         exoPlayer.addListener(listener)
@@ -79,17 +86,16 @@ fun BookVideoPlayer(
         }
     }
 
+    LaunchedEffect(firstFrameRendered) {
+        if (firstFrameRendered) {
+            fadeIn.animateTo(1f, tween(200))
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
 
-        // Слой 0: фон — текстура дерева.
-        AssetImage(
-            fileName = "background.png",
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
+        BookPageBackground()
 
-        // Слой 1: видео.
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -98,28 +104,28 @@ fun BookVideoPlayer(
                     setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
                 }
             },
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    alpha = fadeIn.value
+                    scaleX = 1.01f
+                    scaleY = 1.01f
+                }
         )
 
-        // Слой 2: декоративная рамка поверх видео.
-        AssetImage(
-            fileName = "book_frame.png",
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit
+        // Перехватчик тапов. Всегда активен.
+        // allowSkip = true — тап завершает видео.
+        // allowSkip = false — тап блокируется (не проходит к элементам под видео).
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {
+                        if (allowSkip) onFinished()
+                    }
+                )
         )
-
-        // Слой 3: если allowSkip — невидимая зона нажатия на весь экран.
-        if (allowSkip) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { onFinished() }
-                    )
-            )
-        }
     }
 }
