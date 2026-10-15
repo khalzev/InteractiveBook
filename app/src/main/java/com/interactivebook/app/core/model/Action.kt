@@ -1,6 +1,7 @@
 package com.interactivebook.app.core.model
 
 import com.interactivebook.app.core.checks.Check
+import com.interactivebook.app.core.checks.CheckOutcome
 import com.interactivebook.app.core.conditions.Condition
 import com.interactivebook.app.core.effects.Effect
 
@@ -50,10 +51,17 @@ data class Action(
     val condition: Condition? = null,
     val check: Check? = null,
     val effects: List<Effect> = emptyList(),
+    // Старый механизм: список эффектов на каждый исход проверки.
+    // Работает, если не задано поле `consequences`.
     val onCriticalSuccess: List<Effect>? = null,
     val onSuccess: List<Effect>? = null,
     val onFailure: List<Effect>? = null,
     val onCriticalFailure: List<Effect>? = null,
+    // Новый механизм: маппинг исход → ID consequence-сцены.
+    // Если задано — проверка идёт через DiceRollScreen, потом показывается
+    // consequence-сцена, а эффекты применяются по нажатию "Продолжить" в ней.
+    // Если null — работает старый механизм (onSuccess/onFailure и т.д.).
+    val consequences: Map<CheckOutcome, String>? = null,
     val requiresCharacterCreation: Boolean = false,
     val confirmation: ActionConfirmation? = null,
     val disabledReason: String? = null,

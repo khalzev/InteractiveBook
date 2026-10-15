@@ -37,7 +37,13 @@ data class GameState(
 
     // ID сцен, у которых УЖЕ БЫЛ показан титул части (partTitle). Чтобы титул
     // не показывался повторно при возврате в ту же сцену.
-    val shownPartTitleSceneIds: Set<String> = emptySet()
+    val shownPartTitleSceneIds: Set<String> = emptySet(),
+
+    // Есть непрочитанный предмет в инвентаре. Сбрасывается при открытии инвентаря.
+    val hasUnreadItems: Boolean = false,
+
+    // Есть непрочитанная запись в журнале. Сбрасывается при открытии журнала.
+    val hasUnreadJournal: Boolean = false
 ) {
     companion object {
         /** Пустое состояние для новой игры (раздел 69 — New Game сбрасывает GameState). */

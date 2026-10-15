@@ -43,6 +43,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     /** Настройка: перелистывание страниц. По умолчанию — включено. */
     var pageTurnEnabled by mutableStateOf(true)
         private set
+
     /**
      * ID ресурсов, анимация появления которых УЖЕ БЫЛА показана игроку в этой
      * игровой сессии. При первом появлении ресурса (например, золота в Деле
@@ -75,6 +76,58 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     // Сцена, которая уже была показана полностью. Нужна, чтобы при возврате из инвентаря/журнала/
     // настроек сцена не проигрывала анимацию появления заново. Хранится только в памяти.
     private var revealedSceneId: String? = null
+
+    /**
+     * Отложенный переход. Если действие игрока содержит Transition, но мы хотим
+     * сначала показать анимацию получения ресурса/предмета/информации, то Transition
+     * временно НЕ применяется. Здесь запоминается его целевая сцена. Применяется
+     * отдельным вызовом applyPendingTransition() после завершения анимации.
+     * Хранится только в памяти.
+     */
+    private var pendingTransitionSceneId: String? = null
+    private var pendingTransitionLocationId: String? = null
+
+    /** Есть ли отложенный переход. */
+    fun hasPendingTransition(): Boolean = pendingTransitionSceneId != null
+
+    /**
+     * Применяет действие БЕЗ эффекта Transition.
+     * Используется, когда надо сначала показать анимации получения ресурсов, а потом
+     * уже перейти в новую сцену. Если действие содержит Transition — он откладывается.
+     */
+    fun performActionWithoutTransition(action: Action) {
+        if (action.check != null) return
+        val state = gameState ?: return
+
+        val transition = action.effects.filterIsInstance<Effect.Transition>().firstOrNull()
+        val effectsWithoutTransition = action.effects.filter { it !is Effect.Transition }
+
+        if (transition != null) {
+            pendingTransitionSceneId = transition.sceneId
+            pendingTransitionLocationId = transition.locationId
+        }
+
+        val sceneId = state.currentSceneId
+        val withUsed = if (isNavigationAction(action)) state
+        else markActionUsed(state, sceneId, action.id)
+        updateState(engine.applyEffects(withUsed, effectsWithoutTransition))
+    }
+
+    /** Применяет отложенный переход (если он есть). */
+    fun applyPendingTransition() {
+        val state = gameState ?: return
+        val targetSceneId = pendingTransitionSceneId ?: return
+        val targetLocationId = pendingTransitionLocationId
+        pendingTransitionSceneId = null
+        pendingTransitionLocationId = null
+
+        updateState(
+            state.copy(
+                currentSceneId = targetSceneId,
+                currentLocationId = targetLocationId ?: state.currentLocationId
+            )
+        )
+    }
 
     fun isSceneRevealed(sceneId: String): Boolean = revealedSceneId == sceneId
 
@@ -174,20 +227,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         return state.usedActionsByScene[scene.id] ?: emptySet()
     }
 
-    /**
-     * Автоподсказка стоимости — для действий с отрицательным ChangeResource.
-     */
-    fun costHintFor(action: Action): String? {
-        if (action.hideCostHint) return null
-        val losses = action.effects.filterIsInstance<Effect.ChangeResource>()
-            .filter { it.delta < 0 }
-        if (losses.isEmpty()) return null
-        return losses.joinToString(", ") { effect ->
-            val label = effect.name.ifBlank { effect.resourceId }
-            "(–${-effect.delta} $label)"
-        }
-    }
-
     fun markActionsSeen(scene: Scene) {
         val state = gameState ?: return
         val visibleIds = scene.actions
@@ -209,12 +248,29 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    /**
+     * Навигационное действие — это "просто выход в другую сцену".
+     * У него нет проверки, есть Transition, и все остальные эффекты — идемпотентные
+     * (AddInformation/SetFlag). Такие действия НЕ помечаются как "использованные" —
+     * иначе игрок не сможет выйти из сцены при повторном посещении.
+     */
+    private fun isNavigationAction(action: Action): Boolean {
+        if (action.check != null) return false
+        if (action.effects.none { it is Effect.Transition }) return false
+        return action.effects.all { effect ->
+            effect is Effect.Transition ||
+                    effect is Effect.AddInformation ||
+                    effect is Effect.SetFlag
+        }
+    }
+
     /** Для действий без Check — effects применяются сразу. */
     fun performAction(action: Action) {
         if (action.check != null) return
         val state = gameState ?: return
         val sceneId = state.currentSceneId
-        val withUsed = markActionUsed(state, sceneId, action.id)
+        val withUsed = if (isNavigationAction(action)) state
+        else markActionUsed(state, sceneId, action.id)
         updateState(engine.applyEffects(withUsed, action.effects))
     }
 
@@ -224,11 +280,24 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         return CheckResolver.resolve(action.text, check, state.character)
     }
 
+    /** Применяет Effects нужной ветки результата после того, как UI показал исход. */
     fun applyCheckOutcome(action: Action, outcome: CheckOutcome) {
         val state = gameState ?: return
         val sceneId = state.currentSceneId
         val withUsed = markActionUsed(state, sceneId, action.id)
         updateState(engine.applyCheckOutcome(action, outcome, withUsed))
+    }
+
+    /**
+     * Переводит игрока в consequence-сцену по исходу проверки.
+     * Эффекты самого действия при этом НЕ применяются — они лежат в действии
+     * "Продолжить" внутри consequence-сцены (переехали туда из onSuccess/onFailure).
+     */
+    fun applyConsequence(action: Action, outcome: CheckOutcome) {
+        val state = gameState ?: return
+        val targetSceneId = engine.consequenceSceneIdFor(action, outcome) ?: return
+        val withUsed = markActionUsed(state, state.currentSceneId, action.id)
+        updateState(withUsed.copy(currentSceneId = targetSceneId))
     }
 
     fun outcomeEffects(action: Action, outcome: CheckOutcome): List<Effect> =
@@ -245,5 +314,19 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     fun isPartTitleShown(sceneId: String): Boolean {
         val state = gameState ?: return false
         return sceneId in state.shownPartTitleSceneIds
+    }
+
+    /** Сбрасывает флаг "есть непрочитанный предмет" — вызывается при открытии инвентаря. */
+    fun markInventorySeen() {
+        val state = gameState ?: return
+        if (!state.hasUnreadItems) return
+        updateState(state.copy(hasUnreadItems = false))
+    }
+
+    /** Сбрасывает флаг "есть непрочитанная запись" — вызывается при открытии журнала. */
+    fun markJournalSeen() {
+        val state = gameState ?: return
+        if (!state.hasUnreadJournal) return
+        updateState(state.copy(hasUnreadJournal = false))
     }
 }

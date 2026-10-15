@@ -32,4 +32,12 @@ class GameEngine {
      */
     fun applyCheckOutcome(action: Action, outcome: CheckOutcome, state: GameState): GameState =
         EffectEngine.apply(state, effectsForOutcome(action, outcome))
+
+    /**
+     * Если у действия задан маппинг `consequences` — возвращает ID consequence-сцены
+     * для конкретного исхода проверки. Иначе — null (работает старый механизм
+     * onSuccess/onFailure).
+     */
+    fun consequenceSceneIdFor(action: Action, outcome: CheckOutcome): String? =
+        action.consequences?.get(outcome)
 }

@@ -33,8 +33,9 @@ data class Scene(
     val textVariants: List<TextVariant> = emptyList(),
     val actions: List<Action> = emptyList(),
     val partTitle: PartTitle? = null,
-    // Имя говорящего (например "Страж Руперт"). Показывается маленькой плашкой над
-    // пергаментной панелью текста. Заполняется автором только там, где это диалог с
-    // конкретным собеседником — движок не пытается угадать, диалог это или нет (раздел 84).
-    val speakerName: String? = null
+    val speakerName: String? = null,
+    // Заголовок consequence-сцены — например "РАССМОТРЕТЬ СТРАЖНИКА: УСПЕХ".
+    // Показывается золотым готическим шрифтом над текстом, если задан.
+    // Для обычных сцен — null (заголовок не показывается).
+    val consequenceTitle: String? = null
 )

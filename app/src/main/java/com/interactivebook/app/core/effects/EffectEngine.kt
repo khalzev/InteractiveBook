@@ -42,7 +42,8 @@ object EffectEngine {
                     image = effect.image
                 )
             }
-            state.copy(inventory = newInventory)
+            // Помечаем инвентарь как "есть непрочитанное", чтобы подсветить закладку-сумку.
+            state.copy(inventory = newInventory, hasUnreadItems = true)
         }
 
         is Effect.RemoveItem -> {
@@ -74,9 +75,15 @@ object EffectEngine {
                     val updatedExisting = state.information.map {
                         if (it.id == linkTargetId) it.copy(linkedTo = it.linkedTo + newEntry.id) else it
                     }
-                    state.copy(information = updatedExisting + linkedNew)
+                    state.copy(
+                        information = updatedExisting + linkedNew,
+                        hasUnreadJournal = true
+                    )
                 } else {
-                    state.copy(information = state.information + newEntry)
+                    state.copy(
+                        information = state.information + newEntry,
+                        hasUnreadJournal = true
+                    )
                 }
             }
         }

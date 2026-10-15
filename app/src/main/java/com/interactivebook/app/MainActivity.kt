@@ -4,7 +4,6 @@ import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
-import androidx.compose.ui.unit.sp
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.clickable
@@ -26,9 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.interactivebook.app.ui.common.BookPageBackground
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -39,6 +37,7 @@ import com.interactivebook.app.core.effects.Effect
 import com.interactivebook.app.core.model.Action
 import com.interactivebook.app.ui.character.CharacterCreationScreen
 import com.interactivebook.app.ui.common.AssetImage
+import com.interactivebook.app.ui.common.BookPageBackground
 import com.interactivebook.app.ui.common.BookVideoPlayer
 import com.interactivebook.app.ui.common.GameViewModel
 import com.interactivebook.app.ui.common.PageTurnTransition
@@ -141,10 +140,8 @@ private fun ClosedBookScreen(onContinue: () -> Unit) {
             .fillMaxSize()
             .clickable(onClick = onContinue)
     ) {
-        // Холст: дерево + книга + рамка.
         BookPageBackground()
 
-        // Закрытая книга поверх холста.
         AssetImage(
             fileName = "book_closed.png",
             contentDescription = null,
@@ -251,22 +248,39 @@ private fun InteractiveBookNavHost(
                         actions = viewModel.visibleActions(scene),
                         newActionIds = newActionIds,
                         usedActionIds = usedActionIds,
-                        costHintFor = { action -> viewModel.costHintFor(action) },
                         resources = viewModel.gameState?.resources ?: emptyMap(),
                         resourcesEverSeen = viewModel.resourcesEverSeen,
                         onResourceSeen = { viewModel.markResourceSeen(it) },
+                        hasUnreadItems = viewModel.gameState?.hasUnreadItems ?: false,
+                        hasUnreadJournal = viewModel.gameState?.hasUnreadJournal ?: false,
+                        inventoryItemIds = viewModel.gameState?.inventory?.map { it.id }?.toSet() ?: emptySet(),
+                        informationIds = viewModel.gameState?.information?.map { it.id }?.toSet() ?: emptySet(),
                         revealedAlready = viewModel.isSceneRevealed(scene.id),
                         revealSpeed = viewModel.revealSpeed,
                         onRevealComplete = { viewModel.markSceneRevealed(scene.id) },
                         onSimpleAction = { action ->
                             val currentSceneId = viewModel.gameState?.currentSceneId
-                            val hasTransition = action.effects.any {
-                                it is Effect.Transition && it.sceneId != currentSceneId
+                            val transition = action.effects
+                                .filterIsInstance<Effect.Transition>()
+                                .firstOrNull()
+                            val hasTransition = transition != null &&
+                                    transition.sceneId != currentSceneId
+                            val hasAnimatableEffect = action.effects.any {
+                                it is Effect.AddItem ||
+                                        it is Effect.AddInformation ||
+                                        it is Effect.ChangeResource
                             }
-                            if (hasTransition) {
-                                withPageTurn { viewModel.performAction(action) }
-                            } else {
-                                viewModel.performAction(action)
+
+                            when {
+                                hasTransition && hasAnimatableEffect -> {
+                                    viewModel.performActionWithoutTransition(action)
+                                }
+                                hasTransition -> {
+                                    withPageTurn { viewModel.performAction(action) }
+                                }
+                                else -> {
+                                    viewModel.performAction(action)
+                                }
                             }
                         },
                         onResolveCheck = { action -> viewModel.resolveCheck(action) },
@@ -282,6 +296,14 @@ private fun InteractiveBookNavHost(
                                 viewModel.applyCheckOutcome(action, outcome)
                             }
                         },
+                        onApplyConsequence = { action, outcome ->
+                            viewModel.applyConsequence(action, outcome)
+                        },
+                        onRewardsAnimationComplete = {
+                            if (viewModel.hasPendingTransition()) {
+                                withPageTurn { viewModel.applyPendingTransition() }
+                            }
+                        },
                         onTriggerCharacterCreation = { action ->
                             setPendingCharacterCreationAction(action)
                             withPageTurn { navController.navigate(ROUTE_CHARACTER_CREATION) }
@@ -294,9 +316,11 @@ private fun InteractiveBookNavHost(
                             }
                         },
                         onOpenInventory = {
+                            viewModel.markInventorySeen()
                             withPageTurn { navController.navigate(ROUTE_INVENTORY) }
                         },
                         onOpenJournal = {
+                            viewModel.markJournalSeen()
                             withPageTurn { navController.navigate(ROUTE_JOURNAL) }
                         }
                     )

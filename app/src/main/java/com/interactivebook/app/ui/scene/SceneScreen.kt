@@ -1,8 +1,13 @@
 package com.interactivebook.app.ui.scene
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,21 +16,23 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.interactivebook.app.ui.common.BookDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,6 +48,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -53,17 +61,20 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.interactivebook.app.R
 import com.interactivebook.app.core.checks.CheckOutcome
 import com.interactivebook.app.core.checks.CheckResolution
+import com.interactivebook.app.core.effects.Effect
 import com.interactivebook.app.core.model.Action
 import com.interactivebook.app.core.model.GameResource
 import com.interactivebook.app.core.model.Scene
 import com.interactivebook.app.core.settings.RevealSpeed
 import com.interactivebook.app.ui.check.CheckRollOverlay
+import com.interactivebook.app.ui.check.DiceRollScreen
 import com.interactivebook.app.ui.common.AssetImage
 import com.interactivebook.app.ui.common.BookPageBackground
 import com.interactivebook.app.ui.common.BookPageContent
@@ -88,15 +99,39 @@ private const val PAUSE_AFTER_ILLUSTRATION_MS = 250L
 private const val PAUSE_AFTER_TEXT_MS = 250L
 private const val PAUSE_POLL_MS = 16L
 private const val TAP_MAX_DURATION_MS = 250L
+private const val REWARDS_END_PAUSE_MS = 500L
 
 private val InkColor = Color(0xFF3B2A1A)
 private val InkDimColor = Color(0xFF6B5A44)
 private val BurgundyColor = Color(0xFF7A2525)
 private val GoldTextColor = Color(0xFFE8C766)
+private val SuccessColor = Color(0xFF4F7A38)
+private val FailureColor = Color(0xFF8B2020)
 
 private val ResourcePlateWidth = 113.dp
 private val ResourcePlateHeight = 57.dp
 private val ResourcePlateNumberSize = 22.sp
+
+// Ручка №1 — двигает ВСЮ группу (плашка + закладки).
+private val TopGroupPadding = 85.dp
+
+// Ручка №2 — двигает ТОЛЬКО закладки относительно плашки.
+private val BookmarksOffsetY = (-43).dp
+
+// Ручка №3 — горизонтальный сдвиг ТОЛЬКО плашки золота.
+private val PlateOffsetX = (-4).dp
+
+// Отступ блока иллюстрации и текста — по 5% с каждой стороны.
+private const val SIDE_PADDING_FRACTION = 0.05f
+
+// Размер иконок в подсказках рядом с действиями.
+private val HintIconSize = 16.dp
+private val HintFontSize = 13.sp
+
+// Соответствие resourceId → имя файла иконки в assets/ui/.
+private val ResourceIconMap: Map<String, String> = mapOf(
+    "gold" to "coin.png"
+)
 
 private enum class RevealStage { ILLUSTRATION, TEXT, ACTIONS, DONE }
 
@@ -120,16 +155,21 @@ fun SceneScreen(
     actions: List<Action>,
     newActionIds: Set<String>,
     usedActionIds: Set<String>,
-    costHintFor: (Action) -> String?,
     resources: Map<String, GameResource>,
     resourcesEverSeen: Set<String>,
     onResourceSeen: (String) -> Unit,
+    hasUnreadItems: Boolean,
+    hasUnreadJournal: Boolean,
+    inventoryItemIds: Set<String>,
+    informationIds: Set<String>,
     revealedAlready: Boolean,
     revealSpeed: RevealSpeed,
     onRevealComplete: () -> Unit,
     onSimpleAction: (Action) -> Unit,
     onResolveCheck: (Action) -> CheckResolution?,
     onApplyCheckOutcome: (Action, CheckOutcome) -> Unit,
+    onApplyConsequence: (Action, CheckOutcome) -> Unit,
+    onRewardsAnimationComplete: () -> Unit,
     onTriggerCharacterCreation: (Action) -> Unit,
     onOpenMainMenu: () -> Unit,
     onOpenInventory: () -> Unit,
@@ -176,7 +216,6 @@ fun SceneScreen(
         mutableIntStateOf(if (wasRevealed) actions.size else 0)
     }
 
-    // ---- Анимация монет и счётчика золота ----
     val density = LocalDensity.current
     val screenHeightPx = with(density) {
         LocalConfiguration.current.screenHeightDp.dp.toPx()
@@ -184,20 +223,27 @@ fun SceneScreen(
 
     val goldValue = resources["gold"]?.currentValue ?: 0
 
-    // Отображаемое значение (может отличаться от фактического, пока идёт анимация).
     var displayedGold by remember { mutableStateOf(goldValue) }
-    // Последнее "показанное" значение (для отлова изменений).
     var previousGold by remember { mutableStateOf<Int?>(goldValue) }
+    var previousItemIds by remember { mutableStateOf(inventoryItemIds) }
+    var previousInfoIds by remember { mutableStateOf(informationIds) }
 
     var plateCenter by remember { mutableStateOf(Offset.Zero) }
+    var bagCenter by remember { mutableStateOf(Offset.Zero) }
+    var journalCenter by remember { mutableStateOf(Offset.Zero) }
     var lastActionY by remember { mutableStateOf(0f) }
-    var coins by remember { mutableStateOf<List<CoinFlight>>(emptyList()) }
-    // Значение, к которому нужно привести счётчик после завершения монет.
+    var rewards by remember { mutableStateOf<List<RewardFlight>>(emptyList()) }
     var pendingFinalGold by remember { mutableStateOf<Int?>(null) }
-    // Тип анимации: появление (0 → N) или изменение (перебор).
     var pendingMode by remember { mutableStateOf(GoldAnimMode.NONE) }
+    var rewardsEndedAt by remember { mutableStateOf<Long?>(null) }
 
-    // Первое появление золота в сессии.
+    // Пока летят награды — весь ввод заблокирован.
+    val inputBlocked = rewards.isNotEmpty()
+
+    fun outsidePoint(): Offset =
+        if (lastActionY > 0f) Offset(0f, lastActionY)
+        else Offset(0f, screenHeightPx)
+
     LaunchedEffect(scene.id) {
         if (goldValue > 0 && "gold" !in resourcesEverSeen) {
             displayedGold = 0
@@ -205,28 +251,26 @@ fun SceneScreen(
             pendingFinalGold = goldValue
 
             val count = minOf(goldValue, 5)
-            val newCoins = (0 until count).map { i ->
-                CoinFlight(
+            val newRewards = (0 until count).map { i ->
+                RewardFlight(
                     id = System.nanoTime() + i,
+                    kind = RewardKind.COIN,
                     start = Offset(0f, screenHeightPx),
                     end = plateCenter,
-                    delayMs = i * 150L
+                    delayMs = i * 300L
                 )
             }
-            coins = coins + newCoins
+            rewards = rewards + newRewards
             onResourceSeen("gold")
         }
     }
 
-    // Изменение золота в процессе.
     LaunchedEffect(goldValue) {
         val prev = previousGold
         previousGold = goldValue
         if (prev == null || prev == goldValue) return@LaunchedEffect
-        // Игнорируем случай, когда это "первое появление" (уже обработано).
         if (pendingMode == GoldAnimMode.APPEARANCE) return@LaunchedEffect
 
-        // Плавный перебор счётчика от prev к goldValue.
         val step = if (goldValue > prev) 1 else -1
         var current = prev
         while (current != goldValue) {
@@ -235,36 +279,83 @@ fun SceneScreen(
             delay(150)
         }
 
-        // Монеты.
         val delta = goldValue - prev
         val count = minOf(abs(delta), 5)
         val fromPlate = delta < 0
-        val outsidePoint = if (lastActionY > 0f) {
-            Offset(0f, lastActionY)
-        } else {
-            Offset(0f, screenHeightPx)
-        }
-        val newCoins = (0 until count).map { i ->
-            CoinFlight(
+        val outside = outsidePoint()
+        val newRewards = (0 until count).map { i ->
+            RewardFlight(
                 id = System.nanoTime() + i,
-                start = if (fromPlate) plateCenter else outsidePoint,
-                end = if (fromPlate) outsidePoint else plateCenter,
-                delayMs = i * 150L
+                kind = RewardKind.COIN,
+                start = if (fromPlate) plateCenter else outside,
+                end = if (fromPlate) outside else plateCenter,
+                delayMs = i * 300L
             )
         }
-        coins = coins + newCoins
+        rewards = rewards + newRewards
         lastActionY = 0f
     }
 
-    // При завершении ВСЕХ монет — если был режим "появление", докатываем счётчик.
-    LaunchedEffect(coins) {
-        if (coins.isEmpty() && pendingMode == GoldAnimMode.APPEARANCE) {
-            val target = pendingFinalGold
-            if (target != null) {
-                displayedGold = target
+    LaunchedEffect(inventoryItemIds) {
+        val added = inventoryItemIds - previousItemIds
+        previousItemIds = inventoryItemIds
+        if (added.isEmpty()) return@LaunchedEffect
+
+        val outside = outsidePoint()
+        val count = minOf(added.size, 5)
+        val newRewards = (0 until count).map { i ->
+            RewardFlight(
+                id = System.nanoTime() + i,
+                kind = RewardKind.ITEM,
+                start = outside,
+                end = bagCenter,
+                delayMs = i * 300L
+            )
+        }
+        rewards = rewards + newRewards
+        lastActionY = 0f
+    }
+
+    LaunchedEffect(informationIds) {
+        val added = informationIds - previousInfoIds
+        previousInfoIds = informationIds
+        if (added.isEmpty()) return@LaunchedEffect
+
+        val outside = outsidePoint()
+        val count = minOf(added.size, 5)
+        val newRewards = (0 until count).map { i ->
+            RewardFlight(
+                id = System.nanoTime() + i,
+                kind = RewardKind.SPARK,
+                start = outside,
+                end = journalCenter,
+                delayMs = i * 300L
+            )
+        }
+        rewards = rewards + newRewards
+        lastActionY = 0f
+    }
+
+    LaunchedEffect(rewards) {
+        if (rewards.isEmpty()) {
+            if (pendingMode == GoldAnimMode.APPEARANCE) {
+                val target = pendingFinalGold
+                if (target != null) {
+                    displayedGold = target
+                }
+                pendingMode = GoldAnimMode.NONE
+                pendingFinalGold = null
             }
-            pendingMode = GoldAnimMode.NONE
-            pendingFinalGold = null
+            val ended = rewardsEndedAt
+            if (ended != null) {
+                val elapsed = System.currentTimeMillis() - ended
+                val remaining = REWARDS_END_PAUSE_MS - elapsed
+                if (remaining > 0) delay(remaining)
+                rewardsEndedAt = null
+                onRewardsAnimationComplete()
+            }
+        } else {
+            rewardsEndedAt = System.currentTimeMillis()
         }
     }
 
@@ -320,7 +411,8 @@ fun SceneScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(scene.id, stage) {
+            .pointerInput(scene.id, stage, inputBlocked) {
+                if (inputBlocked) return@pointerInput
                 if (stage == RevealStage.DONE) return@pointerInput
                 awaitEachGesture {
                     val down = awaitFirstDown(
@@ -355,29 +447,49 @@ fun SceneScreen(
         BookPageContent {
             Column(modifier = Modifier.fillMaxSize()) {
 
-                Box(
+                BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(0.25f)
-                        .graphicsLayer { alpha = illustrationAlpha.value },
-                    contentAlignment = Alignment.Center
                 ) {
-                    IllustrationWithFrame()
+                    val sidePadding = maxWidth * SIDE_PADDING_FRACTION
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = sidePadding)
+                            .graphicsLayer { alpha = illustrationAlpha.value },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        IllustrationWithFrame()
+                    }
                 }
 
                 Spacer(Modifier.height(8.dp))
 
-                Box(
+                BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(0.50f)
-                        .fillMaxSize()
                 ) {
-                    TextArea(
-                        displayText = displayText,
-                        revealedChars = revealedChars,
-                        stage = stage
-                    )
+                    val sidePadding = maxWidth * SIDE_PADDING_FRACTION
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = sidePadding)
+                    ) {
+                        scene.consequenceTitle?.let { title ->
+                            ConsequenceTitle(title)
+                        }
+
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            TextArea(
+                                sceneId = scene.id,
+                                displayText = displayText,
+                                revealedChars = revealedChars,
+                                stage = stage
+                            )
+                        }
+                    }
                 }
 
                 Spacer(Modifier.height(6.dp))
@@ -398,7 +510,7 @@ fun SceneScreen(
                         stage = stage,
                         isNew = { it.id in newActionIds },
                         isUsed = { it.id in usedActionIds },
-                        costHintFor = costHintFor,
+                        inputBlocked = inputBlocked,
                         onClick = { action, y ->
                             lastActionY = y
                             onActionClicked(action)
@@ -408,27 +520,27 @@ fun SceneScreen(
             }
         }
 
-        // Верхний правый угол: плашка ресурса + закладки.
         Column(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 30.dp, end = 0.dp),
+                .padding(top = TopGroupPadding, end = 0.dp),
             horizontalAlignment = Alignment.End
         ) {
-            val gold = resources["gold"]
-            if (gold != null) {
-                Box(
-                    modifier = Modifier
-                        .width(ResourcePlateWidth)
-                        .height(ResourcePlateHeight)
-                        .onGloballyPositioned { coords ->
-                            val pos = coords.positionInRoot()
-                            plateCenter = Offset(
-                                pos.x + coords.size.width / 2f,
-                                pos.y + coords.size.height / 2f
-                            )
-                        }
-                ) {
+            Box(
+                modifier = Modifier
+                    .offset(x = PlateOffsetX)
+                    .width(ResourcePlateWidth)
+                    .height(ResourcePlateHeight)
+                    .onGloballyPositioned { coords ->
+                        val pos = coords.positionInRoot()
+                        plateCenter = Offset(
+                            pos.x + coords.size.width / 2f,
+                            pos.y + coords.size.height / 2f
+                        )
+                    }
+            ) {
+                val gold = resources["gold"]
+                if (gold != null) {
                     AssetImage(
                         fileName = "gold_resource_plate.png",
                         contentDescription = null,
@@ -445,56 +557,130 @@ fun SceneScreen(
                             .padding(end = 34.dp)
                     )
                 }
-                Spacer(Modifier.height(6.dp))
             }
 
-            BookmarksRow(
-                onInventory = onOpenInventory,
-                onJournal = onOpenJournal,
-                onMenu = onOpenMainMenu
-            )
+            Box(modifier = Modifier.offset(y = BookmarksOffsetY)) {
+                BookmarksRow(
+                    hasUnreadItems = hasUnreadItems,
+                    hasUnreadJournal = hasUnreadJournal,
+                    inputBlocked = inputBlocked,
+                    onInventory = onOpenInventory,
+                    onJournal = onOpenJournal,
+                    onMenu = onOpenMainMenu,
+                    onBagPositioned = { bagCenter = it },
+                    onJournalPositioned = { journalCenter = it }
+                )
+            }
         }
 
-        CoinFlightLayer(
-            coins = coins,
-            onCoinFinished = { id -> coins = coins.filterNot { it.id == id } }
+        FlyingRewardsLayer(
+            rewards = rewards,
+            onRewardFinished = { id -> rewards = rewards.filterNot { it.id == id } }
         )
     }
 
     pendingCheck?.let { (action, resolution) ->
-        CheckRollOverlay(
-            resolution = resolution,
-            onContinue = {
-                onApplyCheckOutcome(action, resolution.outcome)
-                pendingCheck = null
-            }
-        )
+        if (action.consequences != null) {
+            DiceRollScreen(
+                resolution = resolution,
+                pageTurnEnabled = true,
+                onFinished = {
+                    val outcome = resolution.outcome
+                    pendingCheck = null
+                    onApplyConsequence(action, outcome)
+                }
+            )
+        } else {
+            CheckRollOverlay(
+                resolution = resolution,
+                onContinue = {
+                    onApplyCheckOutcome(action, resolution.outcome)
+                    pendingCheck = null
+                }
+            )
+        }
     }
 
     pendingConfirmation?.let { action ->
         val confirmation = action.confirmation ?: return@let
-        AlertDialog(
+        BookDialog(
             onDismissRequest = { pendingConfirmation = null },
-            title = { Text(confirmation.title) },
-            text = { Text(confirmation.message) },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingConfirmation = null
-                    dispatch(action)
-                }) {
-                    Text(confirmation.confirmLabel)
-                }
+            title = confirmation.title,
+            message = confirmation.message,
+            confirmLabel = confirmation.confirmLabel,
+            onConfirm = {
+                pendingConfirmation = null
+                dispatch(action)
             },
-            dismissButton = {
-                TextButton(onClick = { pendingConfirmation = null }) {
-                    Text(confirmation.cancelLabel)
-                }
-            }
+            dismissLabel = confirmation.cancelLabel,
+            onDismiss = { pendingConfirmation = null }
         )
     }
 }
 
 private enum class GoldAnimMode { NONE, APPEARANCE }
+
+@Composable
+private fun ConsequenceTitle(rawTitle: String) {
+    val idx = rawTitle.indexOf(": ")
+    val (actionPart, outcomePart) = if (idx > 0) {
+        rawTitle.substring(0, idx) to rawTitle.substring(idx + 2)
+    } else {
+        rawTitle to ""
+    }
+
+    val actionDisplay = actionPart.lowercase().replaceFirstChar { it.uppercase() }
+    val outcomeDisplay = outcomePart.lowercase().replaceFirstChar { it.uppercase() }
+
+    val isSuccess = outcomeDisplay.contains("успех", ignoreCase = true)
+    val outcomeColor = if (isSuccess) SuccessColor else FailureColor
+
+    val outcomeShadow = Shadow(
+        color = Color.Black.copy(alpha = 0.55f),
+        offset = Offset(1f, 1f),
+        blurRadius = 3f
+    )
+
+    Text(
+        text = buildAnnotatedString {
+            withStyle(
+                SpanStyle(
+                    color = InkColor,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            ) {
+                append(actionDisplay)
+            }
+            if (outcomeDisplay.isNotEmpty()) {
+                withStyle(
+                    SpanStyle(
+                        color = InkColor,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                ) {
+                    append(": ")
+                }
+                withStyle(
+                    SpanStyle(
+                        color = outcomeColor,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        shadow = outcomeShadow
+                    )
+                ) {
+                    append(outcomeDisplay)
+                }
+            }
+        },
+        textAlign = TextAlign.Center,
+        lineHeight = 24.sp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 10.dp)
+    )
+}
 
 @Composable
 private fun IllustrationWithFrame() {
@@ -530,29 +716,22 @@ private fun IllustrationWithFrame() {
 
 @Composable
 private fun TextArea(
+    sceneId: String,
     displayText: String,
     revealedChars: Int,
     stage: RevealStage
 ) {
-    val scrollState = rememberScrollState()
+    val scrollState = remember(sceneId) { ScrollState(0) }
 
-    // Авто-скролл вниз во время проявления текста.
-    LaunchedEffect(revealedChars, stage) {
-        if (stage != RevealStage.DONE && scrollState.canScrollForward) {
+    val shown = if (stage == RevealStage.DONE) displayText.length
+    else revealedChars.coerceAtMost(displayText.length)
+
+    LaunchedEffect(shown) {
+        if (scrollState.maxValue > 0 && scrollState.value < scrollState.maxValue) {
             scrollState.scrollTo(scrollState.maxValue)
         }
     }
 
-    // При мгновенном появлении (тап) — прокрутить вниз.
-    LaunchedEffect(stage) {
-        if (stage == RevealStage.DONE && scrollState.canScrollForward) {
-            scrollState.scrollTo(scrollState.maxValue)
-        }
-    }
-
-    // Логика затухания:
-    //  - Если текст уходит за ВЕРХНЮЮ границу (можно скроллить вверх) — затухает ВЕРХ.
-    //  - Если текст уходит за НИЖНЮЮ границу (можно скроллить вниз) — затухает НИЗ.
     val canScrollUp = scrollState.canScrollBackward
     val canScrollDown = scrollState.canScrollForward
 
@@ -562,17 +741,16 @@ private fun TextArea(
             .drawWithContent {
                 drawContent()
 
-                // Маска-градиент: где 0 — прозрачно, где 1 — видно.
-                val topStop = if (canScrollUp) 0f else 1f
-                val bottomStop = if (canScrollDown) 0f else 1f
+                val topAlpha = if (canScrollUp) 0.45f else 1f
+                val bottomAlpha = if (canScrollDown) 0.45f else 1f
 
                 drawRect(
                     brush = Brush.verticalGradient(
                         colorStops = arrayOf(
-                            0f to Color.Black.copy(alpha = topStop),
-                            0.18f to Color.Black,
-                            0.82f to Color.Black,
-                            1f to Color.Black.copy(alpha = bottomStop)
+                            0f to Color.Black.copy(alpha = topAlpha),
+                            0.10f to Color.Black,
+                            0.90f to Color.Black,
+                            1f to Color.Black.copy(alpha = bottomAlpha)
                         )
                     ),
                     blendMode = BlendMode.DstIn
@@ -585,25 +763,14 @@ private fun TextArea(
                 .verticalScroll(scrollState)
                 .padding(end = 4.dp)
         ) {
-            val shown = if (stage == RevealStage.DONE) displayText.length
-            else revealedChars.coerceAtMost(displayText.length)
-            val annotated = remember(displayText, shown) {
-                buildAnnotatedString {
-                    append(displayText.substring(0, shown))
-                    withStyle(SpanStyle(color = Color.Transparent)) {
-                        append(displayText.substring(shown))
-                    }
-                }
-            }
             Text(
-                text = annotated,
+                text = displayText.substring(0, shown),
                 color = InkColor,
                 fontSize = 15.sp,
                 lineHeight = 21.sp
             )
         }
 
-        // Стрелки вверх/вниз поверх области.
         if (canScrollUp) {
             Text(
                 text = "⌃",
@@ -663,7 +830,7 @@ private fun ActionsList(
     stage: RevealStage,
     isNew: (Action) -> Boolean,
     isUsed: (Action) -> Boolean,
-    costHintFor: (Action) -> String?,
+    inputBlocked: Boolean,
     onClick: (Action, Float) -> Unit
 ) {
     val scrollState = rememberScrollState()
@@ -684,7 +851,7 @@ private fun ActionsList(
                     visible = visible,
                     isNew = isNew(action),
                     isUsed = isUsed(action),
-                    costHint = costHintFor(action),
+                    inputBlocked = inputBlocked,
                     onClick = { y -> onClick(action, y) }
                 )
             }
@@ -715,7 +882,7 @@ private fun ActionRow(
     visible: Boolean,
     isNew: Boolean,
     isUsed: Boolean,
-    costHint: String?,
+    inputBlocked: Boolean,
     onClick: (Float) -> Unit
 ) {
     val contentDisabled = action.disabledReason != null
@@ -745,7 +912,7 @@ private fun ActionRow(
                     yPosition = coords.positionInRoot().y + coords.size.height / 2f
                 }
                 .clickable(
-                    enabled = visible && !contentDisabled,
+                    enabled = visible && !contentDisabled && !inputBlocked,
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = { onClick(yPosition) }
@@ -771,13 +938,8 @@ private fun ActionRow(
                 modifier = Modifier.weight(1f, fill = false)
             )
 
-            if (!costHint.isNullOrBlank() && !contentDisabled) {
-                Text(
-                    text = "  $costHint",
-                    color = InkDimColor,
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(start = 6.dp)
-                )
+            if (!contentDisabled) {
+                ActionHints(action = action)
             }
         }
 
@@ -792,15 +954,93 @@ private fun ActionRow(
     }
 }
 
+/**
+ * Подсказки рядом с названием действия:
+ *  - изменение ресурсов: «(−2 [coin])» / «(+1 [coin])»
+ *  - проверка:           «([dice] ≥ 17)»
+ */
+@Composable
+private fun ActionHints(action: Action) {
+    if (action.hideCostHint) return
+
+    val resourceChanges = action.effects
+        .filterIsInstance<Effect.ChangeResource>()
+        .filter { it.delta != 0 }
+    val check = action.check
+
+    if (resourceChanges.isEmpty() && check == null) return
+
+    Row(
+        modifier = Modifier.padding(start = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Хинт проверки: ([кубик] ≥ DC)
+        if (check != null) {
+            HintText("(")
+            AssetImage(
+                fileName = "dice.png",
+                contentDescription = null,
+                modifier = Modifier.size(HintIconSize)
+            )
+            HintText(" ≥ ${check.difficulty})")
+        }
+
+        // Хинты ресурсов: (−2 [coin]) или (+1 [coin])
+        resourceChanges.forEach { effect ->
+            val sign = if (effect.delta > 0) "+" else "−"
+            val absDelta = abs(effect.delta)
+            Spacer(Modifier.width(4.dp))
+            HintText("(")
+            HintText("$sign$absDelta ")
+            val iconFile = ResourceIconMap[effect.resourceId]
+            if (iconFile != null) {
+                AssetImage(
+                    fileName = iconFile,
+                    contentDescription = null,
+                    modifier = Modifier.size(HintIconSize)
+                )
+            } else {
+                HintText(effect.name.ifBlank { effect.resourceId })
+            }
+            HintText(")")
+        }
+    }
+}
+
+@Composable
+private fun HintText(text: String) {
+    Text(
+        text = text,
+        color = InkDimColor,
+        fontSize = HintFontSize
+    )
+}
+
 @Composable
 private fun BookmarksRow(
+    hasUnreadItems: Boolean,
+    hasUnreadJournal: Boolean,
+    inputBlocked: Boolean,
     onInventory: () -> Unit,
     onJournal: () -> Unit,
-    onMenu: () -> Unit
+    onMenu: () -> Unit,
+    onBagPositioned: (Offset) -> Unit,
+    onJournalPositioned: (Offset) -> Unit
 ) {
+    val pulse = rememberInfiniteTransition(label = "bookmarkPulse")
+    val pulseAlpha by pulse.animateFloat(
+        initialValue = 0.65f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
+
     Box(
         modifier = Modifier
-            .height(140.dp)
+            .height(130.dp)
             .width(170.dp)
     ) {
         AssetImage(
@@ -815,7 +1055,25 @@ private fun BookmarksRow(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxSize()
+                    .onGloballyPositioned { coords ->
+                        val pos = coords.positionInRoot()
+                        onBagPositioned(
+                            Offset(
+                                pos.x + coords.size.width / 2f,
+                                pos.y + coords.size.height / 2f
+                            )
+                        )
+                    }
+                    .graphicsLayer {
+                        alpha = if (hasUnreadItems) pulseAlpha * 0.35f else 0f
+                    }
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(GoldTextColor.copy(alpha = 0.9f), Color.Transparent)
+                        )
+                    )
                     .clickable(
+                        enabled = !inputBlocked,
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = onInventory
@@ -825,7 +1083,25 @@ private fun BookmarksRow(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxSize()
+                    .onGloballyPositioned { coords ->
+                        val pos = coords.positionInRoot()
+                        onJournalPositioned(
+                            Offset(
+                                pos.x + coords.size.width / 2f,
+                                pos.y + coords.size.height / 2f
+                            )
+                        )
+                    }
+                    .graphicsLayer {
+                        alpha = if (hasUnreadJournal) pulseAlpha * 0.35f else 0f
+                    }
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(GoldTextColor.copy(alpha = 0.9f), Color.Transparent)
+                        )
+                    )
                     .clickable(
+                        enabled = !inputBlocked,
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = onJournal
@@ -836,6 +1112,7 @@ private fun BookmarksRow(
                     .weight(1f)
                     .fillMaxSize()
                     .clickable(
+                        enabled = !inputBlocked,
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = onMenu

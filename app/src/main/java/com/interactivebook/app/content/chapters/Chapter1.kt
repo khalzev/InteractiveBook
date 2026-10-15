@@ -1,30 +1,22 @@
 package com.interactivebook.app.content.chapters
 
 import com.interactivebook.app.core.checks.Check
+import com.interactivebook.app.core.checks.CheckOutcome
 import com.interactivebook.app.core.conditions.Condition
 import com.interactivebook.app.core.effects.Effect
 import com.interactivebook.app.core.model.Action
 import com.interactivebook.app.core.model.InformationType
-import com.interactivebook.app.core.model.Scene
 import com.interactivebook.app.core.model.PartTitle
+import com.interactivebook.app.core.model.Scene
 import com.interactivebook.app.core.model.SkillType
 import com.interactivebook.app.core.model.StatType
 
 /**
  * Глава 1: "Человек, которого не было". Локация "Переулок нижнего города" + "Дом № 385" (заглушка).
  *
- * Инженерные решения, добавленные сверх буквального текста раскадровки (отмечены в комментариях):
- * - flag guard_annoyed маршрутизирует ВСЕ возвраты к стражнику между обычным и "раздражённым"
- *   вариантом хаба через пары действий с взаимоисключающими Condition — выглядит как одна и та
- *   же кнопка, меняющая пункт назначения.
- * - "Осмотреть плющ у стены" — эскалация DC через resource ivy_retry_count (14→...→20, капс) и
- *   временно неактивное действие (disabledReason) между провалом и повторным "Расспросить об
- *   уликах".
- * - pavement_resolved / guard_observed / ivy_resolved — сделаны одноразовыми (после успеха
- *   исчезают), чтобы нельзя было бесконечно фармить монеты/информацию повторными попытками —
- *   в раскадровке это не оговорено явно, решение моё.
- * - Платные действия (заплатить стражнику/канцелярии) защищены ResourceCompare(gold, AT_LEAST),
- *   чтобы нельзя было уйти в минус.
+ * Новый механизм проверок: проверка идёт через DiceRollScreen (Action.consequences),
+ * далее consequence-сцена с текстом исхода и действием «Продолжить».
+ * Эффекты применяются при нажатии «Продолжить».
  */
 object Chapter1 {
 
@@ -181,19 +173,37 @@ object Chapter1 {
                 text = "Рассмотреть стражника",
                 condition = Condition.HasFlag("guard_observed", false),
                 check = Check(StatType.INTELLECT, SkillType.OBSERVATION, 16),
-                onCriticalFailure = listOf(Effect.Transition("c1_guard_angry")),
-                onFailure = listOf(Effect.Transition("c1_guard_recognized_annoyed")),
-                onSuccess = listOf(
-                    Effect.SetFlag("guard_observed", true),
-                    Effect.AddInformation(
-                        "guard_watching_corners", "Стражник что-то высматривает",
-                        "Он часто оглядывается, внимательно смотрит в тёмные углы переулка и " +
-                                "прислушивается к каждому шороху, словно опасается увидеть там нечто, " +
-                                "чего видеть не хочет.", "Стражник", InformationType.NOTE
-                    ),
-                    Effect.Transition("c1_guard_rats")
-                ),
-                onCriticalSuccess = listOf(
+                consequences = mapOf(
+                    CheckOutcome.CRITICAL_SUCCESS to "c1_examine_guard_crit_success",
+                    CheckOutcome.SUCCESS to "c1_examine_guard_success",
+                    CheckOutcome.FAILURE to "c1_examine_guard_failure",
+                    CheckOutcome.CRITICAL_FAILURE to "c1_examine_guard_crit_failure"
+                )
+            ),
+            Action(
+                id = "end_talk_annoyed",
+                text = "Закончить разговор",
+                effects = listOf(Effect.Transition("c1_alley_entrance"))
+            )
+        )
+    )
+
+    // ---------- Consequence-сцены: "Рассмотреть стражника" ----------
+
+    private val examineGuardCritSuccessScene = Scene(
+        id = "c1_examine_guard_crit_success",
+        locationId = "lower_city_alley",
+        consequenceTitle = "РАССМОТРЕТЬ СТРАЖНИКА: КРИТИЧЕСКИЙ УСПЕХ",
+        text = "Вы замечаете, что под сапогом Руперта лежит монета. Должно быть, одна из тех, " +
+                "что были разбросаны после убийства.\n\n" +
+                "Он её не замечает — взгляд стражника прикован к тёмному концу переулка.\n\n" +
+                "Вы быстро поднимаете монету.\n\n" +
+                "Руперт ничего не замечает.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(
                     Effect.SetFlag("guard_observed", true),
                     Effect.AddInformation(
                         "guard_watching_corners", "Стражник что-то высматривает",
@@ -204,14 +214,69 @@ object Chapter1 {
                     Effect.ChangeResource("gold", 1, "Золото", min = 0),
                     Effect.Transition("c1_guard_rats")
                 )
-            ),
-            Action(
-                id = "end_talk_annoyed",
-                text = "Закончить разговор",
-                effects = listOf(Effect.Transition("c1_alley_entrance"))
             )
         )
     )
+
+    private val examineGuardSuccessScene = Scene(
+        id = "c1_examine_guard_success",
+        locationId = "lower_city_alley",
+        consequenceTitle = "РАССМОТРЕТЬ СТРАЖНИКА: УСПЕХ",
+        text = "Вы подмечаете нервозность Руперта, и для стражника это выглядит странно. Он часто " +
+                "оглядывается, внимательно смотрит в тёмные углы переулка, прислушивается к каждому " +
+                "шороху, словно опасается увидеть там нечто, чего видеть не хочет.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(
+                    Effect.SetFlag("guard_observed", true),
+                    Effect.AddInformation(
+                        "guard_watching_corners", "Стражник что-то высматривает",
+                        "Он часто оглядывается, внимательно смотрит в тёмные углы переулка и " +
+                                "прислушивается к каждому шороху, словно опасается увидеть там нечто, " +
+                                "чего видеть не хочет.", "Стражник", InformationType.NOTE
+                    ),
+                    Effect.Transition("c1_guard_rats")
+                )
+            )
+        )
+    )
+
+    private val examineGuardFailureScene = Scene(
+        id = "c1_examine_guard_failure",
+        locationId = "lower_city_alley",
+        consequenceTitle = "РАССМОТРЕТЬ СТРАЖНИКА: ПРОВАЛ",
+        text = "Вы ничего особенного не замечаете, что отличало бы этого стражника от других. " +
+                "Разве что он был немного более щетинист, чем принято у городской стражи, да доспехи " +
+                "его выглядели так, словно он давно забыл, что их полагается чистить.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(Effect.Transition("c1_guard_recognized_annoyed"))
+            )
+        )
+    )
+
+    private val examineGuardCritFailureScene = Scene(
+        id = "c1_examine_guard_crit_failure",
+        locationId = "lower_city_alley",
+        consequenceTitle = "РАССМОТРЕТЬ СТРАЖНИКА: КРИТИЧЕСКИЙ ПРОВАЛ",
+        speakerName = "Стражник Руперт",
+        text = "— Чего пялишься? — резко бросил Руперт. — Задумал что-то?\n\n" +
+                "Он шагнул ближе.\n\n" +
+                "— Ты мне не нравишься. Пошёл вон.\n\n" +
+                "Не дожидаясь ответа, стражник толкнул вас плечом, выгоняя из переулка.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(Effect.Transition("c1_guard_angry"))
+            )
+        )
+    )
+
     // ---------- Темы разговора ----------
 
     private val guardIncident = Scene(
@@ -377,29 +442,12 @@ object Chapter1 {
                 id = "ask_more_strangeness",
                 text = "Может, ещё что-то?",
                 check = Check(StatType.INTELLECT, SkillType.ELOQUENCE, 15),
-                onCriticalFailure = listOf(Effect.Transition("c1_guard_angry")),
-                onFailure = listOf(
-                    Effect.SetFlag("strangeness_bribe_offered", true),
-                    Effect.Transition("c1_guard_strangeness_bribe_offer")
-                ),
-                onSuccess = listOf(Effect.Transition("c1_guard_finger")),
-                onCriticalSuccess = listOf(
-                    Effect.AddInformation(
-                        "giant_rats", "Огромные крысы",
-                        "Стражник упоминает огромных крыс, которые снуют повсюду, и советует " +
-                                "смотреть в оба — он думает, что откушенный палец может быть их рук делом.",
-                        "Стражник", InformationType.NOTE
-                    ),
-                    Effect.Transition("c1_guard_finger")
+                consequences = mapOf(
+                    CheckOutcome.CRITICAL_SUCCESS to "c1_ask_more_crit_success",
+                    CheckOutcome.SUCCESS to "c1_ask_more_success",
+                    CheckOutcome.FAILURE to "c1_ask_more_failure",
+                    CheckOutcome.CRITICAL_FAILURE to "c1_ask_more_crit_failure"
                 )
-            ),
-            Action(
-                id = "bribe_for_more",
-                text = "Думаю, эти монеты тебе понравятся",
-                condition = Condition.And(
-                    listOf(Condition.HasFlag("strangeness_bribe_offered", true), Condition.ResourceCompare("gold", Condition.Comparison.AT_LEAST, 2))
-                ),
-                effects = listOf(Effect.ChangeResource("gold", -2, "Золото", min = 0), Effect.Transition("c1_guard_finger"))
             ),
             Action(
                 id = "leave_strangeness",
@@ -409,9 +457,29 @@ object Chapter1 {
         )
     )
 
-    private val guardStrangenessBribeOffer = Scene(
-        id = "c1_guard_strangeness_bribe_offer",
+    // ---------- Consequence-сцены: "Может, ещё что-то?" ----------
+
+    private val askMoreCritFailureScene = Scene(
+        id = "c1_ask_more_crit_failure",
         locationId = "lower_city_alley",
+        consequenceTitle = "МОЖЕТ, ЕЩЁ ЧТО-ТО: КРИТИЧЕСКИЙ ПРОВАЛ",
+        speakerName = "Стражник Руперт",
+        text = "— Может, тебе ещё рассказать, где я вчера нужду справлял?\n\n" +
+                "Руперт оскалился.\n\n" +
+                "— Отвали от меня, пока я тебя сам в темницу не упёк.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(Effect.Transition("c1_guard_angry"))
+            )
+        )
+    )
+
+    private val askMoreFailureScene = Scene(
+        id = "c1_ask_more_failure",
+        locationId = "lower_city_alley",
+        consequenceTitle = "МОЖЕТ, ЕЩЁ ЧТО-ТО: ПРОВАЛ",
         speakerName = "Стражник Руперт",
         text = "Руперт ухмыльнулся.\n\n" +
                 "— Можно и ещё кое-что рассказать.\n\n" +
@@ -419,12 +487,70 @@ object Chapter1 {
                 "— Но не бесплатно.",
         actions = listOf(
             Action(
-                id = "leave_bribe_offer",
-                text = "Спросить о чём-то другом",
+                id = "bribe_for_more",
+                text = "Отдать две золотые",
+                condition = Condition.ResourceCompare("gold", Condition.Comparison.AT_LEAST, 2),
+                effects = listOf(
+                    Effect.ChangeResource("gold", -2, "Золото", min = 0),
+                    Effect.Transition("c1_guard_finger")
+                )
+            ),
+            Action(
+                id = "refuse_bribe",
+                text = "Уйти ни с чем",
                 effects = listOf(Effect.Transition("c1_guard_recognized_annoyed"))
             )
         )
     )
+
+    private val askMoreSuccessScene = Scene(
+        id = "c1_ask_more_success",
+        locationId = "lower_city_alley",
+        consequenceTitle = "МОЖЕТ, ЕЩЁ ЧТО-ТО: УСПЕХ",
+        speakerName = "Стражник Руперт",
+        text = "— Ну, есть ещё что-нибудь? — протянул Руперт, растянув губы в мерзкой улыбке.\n\n" +
+                "В тусклом свете, едва пробивавшемся в грязный переулок, его лицо казалось ещё гаже " +
+                "обычного. Улыбка обнажила пожелтевшие зубы и глубокие складки у рта. На миг вам " +
+                "показалось, что даже мёртвые стены заброшенных домов выглядят приветливее этого " +
+                "человека. Вы невольно подумали, что хмурый вид ему куда больше к лицу.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(Effect.Transition("c1_guard_finger"))
+            )
+        )
+    )
+
+    private val askMoreCritSuccessScene = Scene(
+        id = "c1_ask_more_crit_success",
+        locationId = "lower_city_alley",
+        consequenceTitle = "МОЖЕТ, ЕЩЁ ЧТО-ТО: КРИТИЧЕСКИЙ УСПЕХ",
+        speakerName = "Стражник Руперт",
+        text = "Стражник задумался, зажмурился и принялся что-то бубнить себе под нос, словно " +
+                "читая молитву. Из его невнятного бормотания удавалось разобрать лишь обрывки " +
+                "нелепых слов об огромных крысах, пожирающих людей заживо.\n\n" +
+                "Пока Руперт с закрытыми глазами шептал свои странные слова, вы заметили ещё одну " +
+                "монету возле его сапога. Дождавшись удобного мгновения, вы бесшумно наклонились, " +
+                "ловко подняли её и спрятали в карман.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(
+                    Effect.AddInformation(
+                        "giant_rats", "Огромные крысы",
+                        "Стражник упоминает огромных крыс, которые снуют повсюду, и советует " +
+                                "смотреть в оба — он думает, что откушенный палец может быть их рук делом.",
+                        "Стражник", InformationType.NOTE
+                    ),
+                    Effect.ChangeResource("gold", 1, "Золото", min = 0),
+                    Effect.Transition("c1_guard_finger")
+                )
+            )
+        )
+    )
+
     private val guardFinger = Scene(
         id = "c1_guard_finger",
         locationId = "lower_city_alley",
@@ -489,16 +615,125 @@ object Chapter1 {
                 id = "ask_nervous",
                 text = "Ты чего такой нервный? Боишься чего? Тут нет никого кроме нас.",
                 check = Check(StatType.INTELLECT, SkillType.ELOQUENCE, 17),
-                onCriticalFailure = listOf(Effect.Transition("c1_guard_angry")),
-                onFailure = listOf(Effect.Transition("c1_guard_recognized_annoyed")),
-                onSuccess = listOf(
-                    Effect.AddInformation("rats", "Крысы", "Руперт с детства боится крыс. Ему кажется, что они шныряют по углам переулка, даже когда он их не видит. Он думает, что мизинец Гремма могли отгрызть именно крысы.", "Стражник", InformationType.NOTE, linkIfPresent = "guard_watching_corners"),
-                    Effect.AddInformation("finger", "Про палец", "У найденного тела не хватает мизинца на правой руке — как и у Гремма.", "Дело", InformationType.NOTE),
+                consequences = mapOf(
+                    CheckOutcome.CRITICAL_SUCCESS to "c1_nervous_crit_success",
+                    CheckOutcome.SUCCESS to "c1_nervous_success",
+                    CheckOutcome.FAILURE to "c1_nervous_failure",
+                    CheckOutcome.CRITICAL_FAILURE to "c1_nervous_crit_failure"
+                )
+            )
+        )
+    )
+
+    // ---------- Consequence-сцены: "Ты чего такой нервный?" ----------
+
+    private val nervousCritFailureScene = Scene(
+        id = "c1_nervous_crit_failure",
+        locationId = "lower_city_alley",
+        consequenceTitle = "ТЫ ЧЕГО ТАКОЙ НЕРВНЫЙ: КРИТИЧЕСКИЙ ПРОВАЛ",
+        speakerName = "Стражник Руперт",
+        text = "Глаза стражника округляются от удивления и злости.\n\n" +
+                "— Намекаешь, что я трус?\n\n" +
+                "Руперт хватает вас за грудки и резко притягивает к себе.\n\n" +
+                "— А ну проваливай, пока ходить можешь.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(Effect.Transition("c1_guard_angry"))
+            )
+        )
+    )
+
+    private val nervousFailureScene = Scene(
+        id = "c1_nervous_failure",
+        locationId = "lower_city_alley",
+        consequenceTitle = "ТЫ ЧЕГО ТАКОЙ НЕРВНЫЙ: ПРОВАЛ",
+        speakerName = "Стражник Руперт",
+        text = "— Тебе показалось, — недовольно фыркает Руперт.\n\n" +
+                "Он поправляет ремень на доспехах и делает вид, будто совершенно спокоен.\n\n" +
+                "Но взгляд его снова скользит к тёмному углу переулка.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(Effect.Transition("c1_guard_recognized_annoyed"))
+            )
+        )
+    )
+
+    private val nervousSuccessScene = Scene(
+        id = "c1_nervous_success",
+        locationId = "lower_city_alley",
+        consequenceTitle = "ТЫ ЧЕГО ТАКОЙ НЕРВНЫЙ: УСПЕХ",
+        speakerName = "Стражник Руперт",
+        text = "— По мне видно? — удивлённо спрашивает Руперт.\n\n" +
+                "На мгновение его привычная наглость исчезает.\n\n" +
+                "— Я с детства крыс боюсь. Мне всё кажется, что они тут по углам шныряют. Я их " +
+                "слышу. Даже когда не вижу.\n\n" +
+                "Он нервно проводит рукой по лицу.\n\n" +
+                "— У Гремма на правой руке мизинца не было. Это они, должно быть. Крысы. Их работа, " +
+                "не иначе.\n\n" +
+                "Руперт скривился.\n\n" +
+                "— Проклятые твари. Ненавижу.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(
+                    Effect.AddInformation(
+                        "rats", "Крысы",
+                        "Руперт с детства боится крыс. Ему кажется, что они шныряют по углам " +
+                                "переулка, даже когда он их не видит. Он думает, что мизинец Гремма " +
+                                "могли отгрызть именно крысы.",
+                        "Стражник", InformationType.NOTE, linkIfPresent = "guard_watching_corners"
+                    ),
+                    Effect.AddInformation(
+                        "finger", "Про палец",
+                        "У найденного тела не хватает мизинца на правой руке — как и у Гремма.",
+                        "Дело", InformationType.NOTE
+                    ),
                     Effect.Transition("c1_guard_recognized_annoyed")
-                ),
-                onCriticalSuccess = listOf(
-                    Effect.AddInformation("rats", "Крысы", "Руперт с детства боится крыс. Ему кажется, что они шныряют по углам переулка, даже когда он их не видит. Он думает, что мизинец Гремма могли отгрызть именно крысы.", "Стражник", InformationType.NOTE, linkIfPresent = "guard_watching_corners"),
-                    Effect.AddInformation("finger", "Про палец", "У найденного тела не хватает мизинца на правой руке — как и у Гремма.", "Дело", InformationType.NOTE),
+                )
+            )
+        )
+    )
+
+    private val nervousCritSuccessScene = Scene(
+        id = "c1_nervous_crit_success",
+        locationId = "lower_city_alley",
+        consequenceTitle = "ТЫ ЧЕГО ТАКОЙ НЕРВНЫЙ: КРИТИЧЕСКИЙ УСПЕХ",
+        speakerName = "Стражник Руперт",
+        text = "— По мне видно? — удивляется Руперт.\n\n" +
+                "На его лице на мгновение появляется неподдельный страх.\n\n" +
+                "— Я с детства крыс боюсь. Мне всё кажется, что они тут шныряют. Снуют по углам, " +
+                "под камнями... Я их слышу. У Гремма мизинца на правой руке не было. Это они, " +
+                "должно быть. Их работа. Проклятые крысы.\n\n" +
+                "Он резко меняется в лице.\n\n" +
+                "— Я так боюсь здесь один стоять...\n\n" +
+                "Руперт осекается, поняв, что сказал лишнее.\n\n" +
+                "Несколько секунд молчит, затем натягивает на лицо привычную ухмылку.\n\n" +
+                "— Послушай. Ты главное никому не разболтай, хорошо?\n\n" +
+                "Он незаметно вкладывает вам в ладонь монету.\n\n" +
+                "— Будем считать, что этого разговора не было.\n\n" +
+                "Он похлопывает вас по плечу.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(
+                    Effect.AddInformation(
+                        "rats", "Крысы",
+                        "Руперт с детства боится крыс. Ему кажется, что они шныряют по углам " +
+                                "переулка, даже когда он их не видит. Он думает, что мизинец Гремма " +
+                                "могли отгрызть именно крысы.",
+                        "Стражник", InformationType.NOTE, linkIfPresent = "guard_watching_corners"
+                    ),
+                    Effect.AddInformation(
+                        "finger", "Про палец",
+                        "У найденного тела не хватает мизинца на правой руке — как и у Гремма.",
+                        "Дело", InformationType.NOTE
+                    ),
                     Effect.ChangeResource("gold", 1, "Золото", min = 0),
                     Effect.Transition("c1_guard_recognized_annoyed")
                 )
@@ -524,26 +759,11 @@ object Chapter1 {
             text = "Осмотреть плющ у стены",
             condition = Condition.And(conditions),
             check = Check(StatType.INTELLECT, SkillType.OBSERVATION, dc),
-            onCriticalFailure = listOf(
-                Effect.ChangeResource("gold", -5, "Золото", min = 0),
-                Effect.Transition("c1_guard_angry")
-            ),
-            onFailure = listOf(
-                Effect.SetFlag("ivy_needs_retry", true),
-                Effect.Transition("c1_crime_scene")
-            ),
-            onSuccess = listOf(
-                Effect.SetFlag("ivy_resolved", true),
-                Effect.AddItem("signet_ring", "Кольцо-печатка с гербом", "Металлическое кольцо с гербом, найденное среди побегов плюща.", 1),
-                Effect.AddInformation("ring_examinable_note", "Кольцо стоит рассмотреть", "Кольцо можно рассмотреть внимательнее — возможно, оно подскажет что-то новое.", "Предметы", InformationType.NOTE),
-                Effect.Transition("c1_crime_scene")
-            ),
-            onCriticalSuccess = listOf(
-                Effect.SetFlag("ivy_resolved", true),
-                Effect.AddItem("signet_ring", "Кольцо-печатка с гербом", "Металлическое кольцо с гербом, найденное среди побегов плюща.", 1),
-                Effect.AddInformation("ring_examinable_note", "Кольцо стоит рассмотреть", "Кольцо можно рассмотреть внимательнее — возможно, оно подскажет что-то новое.", "Предметы", InformationType.NOTE),
-                Effect.ChangeResource("gold", 2, "Золото", min = 0),
-                Effect.Transition("c1_crime_scene")
+            consequences = mapOf(
+                CheckOutcome.CRITICAL_SUCCESS to "c1_ivy_crit_success",
+                CheckOutcome.SUCCESS to "c1_ivy_success",
+                CheckOutcome.FAILURE to "c1_ivy_failure",
+                CheckOutcome.CRITICAL_FAILURE to "c1_ivy_crit_failure"
             )
         )
     }
@@ -577,23 +797,204 @@ object Chapter1 {
                 text = "Осмотреть мостовую",
                 condition = Condition.HasFlag("pavement_resolved", false),
                 check = Check(StatType.INTELLECT, SkillType.OBSERVATION, 16),
-                onCriticalFailure = listOf(Effect.Transition("c1_guard_angry")),
-                onFailure = listOf(Effect.Transition("c1_crime_scene")),
-                onSuccess = listOf(
-                    Effect.SetFlag("pavement_resolved", true),
-                    Effect.ChangeResource("gold", 1, "Золото", min = 0),
-                    Effect.Transition("c1_crime_scene")
-                ),
-                onCriticalSuccess = listOf(
-                    Effect.SetFlag("pavement_resolved", true),
-                    Effect.ChangeResource("gold", 3, "Золото", min = 0),
-                    Effect.Transition("c1_crime_scene")
+                consequences = mapOf(
+                    CheckOutcome.CRITICAL_SUCCESS to "c1_pavement_crit_success",
+                    CheckOutcome.SUCCESS to "c1_pavement_success",
+                    CheckOutcome.FAILURE to "c1_pavement_failure",
+                    CheckOutcome.CRITICAL_FAILURE to "c1_pavement_crit_failure"
                 )
             )
         ) + ivyActions + ivyDisabledPlaceholder + Action(
             id = "finish_crime_scene",
             text = "Закончить осмотр",
             effects = listOf(Effect.Transition("c1_alley_entrance"))
+        )
+    )
+
+    // ---------- Consequence-сцены: "Осмотреть плющ у стены" ----------
+
+    private val ivyCritFailureScene = Scene(
+        id = "c1_ivy_crit_failure",
+        locationId = "lower_city_alley",
+        consequenceTitle = "ОСМОТРЕТЬ ПЛЮЩ У СТЕНЫ: КРИТИЧЕСКИЙ ПРОВАЛ",
+        text = "Вам кажется, что в зарослях плюща может быть что-то важное.\n\n" +
+                "Вы осторожно раздвигаете побеги и проверяете стену. Вдруг из зелени выскакивает " +
+                "огромная крыса и впивается зубами в палец.\n\n" +
+                "От боли вы падаете на мостовую. Из кошелька вылетают золотые монеты и с грохотом " +
+                "рассыпаются по переулку.\n\n" +
+                "Руперт отшатывается от вас, будто вы заразны.\n\n" +
+                "— В лазарет! Живо!",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(
+                    Effect.ChangeResource("gold", -5, "Золото", min = 0),
+                    Effect.Transition("c1_guard_angry")
+                )
+            )
+        )
+    )
+
+    private val ivyFailureScene = Scene(
+        id = "c1_ivy_failure",
+        locationId = "lower_city_alley",
+        consequenceTitle = "ОСМОТРЕТЬ ПЛЮЩ У СТЕНЫ: ПРОВАЛ",
+        text = "Вам кажется, что в зарослях плюща может быть что-то важное.\n\n" +
+                "Вы почти час проверяете каждый дюйм стены, раздвигаете спутанные побеги, " +
+                "заглядываете в каждую щель.\n\n" +
+                "Но безуспешно.\n\n" +
+                "Только сырой камень, грязь и запах гнили.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(
+                    Effect.SetFlag("ivy_needs_retry", true),
+                    Effect.Transition("c1_crime_scene")
+                )
+            )
+        )
+    )
+
+    private val ivySuccessScene = Scene(
+        id = "c1_ivy_success",
+        locationId = "lower_city_alley",
+        consequenceTitle = "ОСМОТРЕТЬ ПЛЮЩ У СТЕНЫ: УСПЕХ",
+        text = "Вам кажется, что в зарослях плюща может быть что-то важное.\n\n" +
+                "Аккуратными движениями вы раздвигаете спутанные побеги и наконец замечаете среди " +
+                "камней металлический блеск.\n\n" +
+                "Кольцо.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(
+                    Effect.SetFlag("ivy_resolved", true),
+                    Effect.AddItem(
+                        "signet_ring", "Кольцо-печатка с гербом",
+                        "Металлическое кольцо с гербом, найденное среди побегов плюща.", 1
+                    ),
+                    Effect.AddInformation(
+                        "ring_examinable_note", "Кольцо стоит рассмотреть",
+                        "Кольцо можно рассмотреть внимательнее — возможно, оно подскажет что-то новое.",
+                        "Предметы", InformationType.NOTE
+                    ),
+                    Effect.Transition("c1_crime_scene")
+                )
+            )
+        )
+    )
+
+    private val ivyCritSuccessScene = Scene(
+        id = "c1_ivy_crit_success",
+        locationId = "lower_city_alley",
+        consequenceTitle = "ОСМОТРЕТЬ ПЛЮЩ У СТЕНЫ: КРИТИЧЕСКИЙ УСПЕХ",
+        text = "Вам кажется, что в зарослях плюща может быть что-то важное.\n\n" +
+                "Аккуратными движениями вы проверяете стену и наконец находите кольцо.\n\n" +
+                "Потянувшись за ним, вы замечаете рядом ещё две золотые монеты.\n\n" +
+                "Вот это удача!",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(
+                    Effect.SetFlag("ivy_resolved", true),
+                    Effect.AddItem(
+                        "signet_ring", "Кольцо-печатка с гербом",
+                        "Металлическое кольцо с гербом, найденное среди побегов плюща.", 1
+                    ),
+                    Effect.AddInformation(
+                        "ring_examinable_note", "Кольцо стоит рассмотреть",
+                        "Кольцо можно рассмотреть внимательнее — возможно, оно подскажет что-то новое.",
+                        "Предметы", InformationType.NOTE
+                    ),
+                    Effect.ChangeResource("gold", 2, "Золото", min = 0),
+                    Effect.Transition("c1_crime_scene")
+                )
+            )
+        )
+    )
+
+    // ---------- Consequence-сцены: "Осмотреть мостовую" ----------
+
+    private val pavementCritFailureScene = Scene(
+        id = "c1_pavement_crit_failure",
+        locationId = "lower_city_alley",
+        consequenceTitle = "ОСМОТРЕТЬ МОСТОВУЮ: КРИТИЧЕСКИЙ ПРОВАЛ",
+        speakerName = "Стражник Руперт",
+        text = "Вы замечаете за камнем у мостовой тусклый блеск.\n\n" +
+                "Монета.\n\n" +
+                "Стоило вам только нагнуться, как Руперт вас заметил.\n\n" +
+                "— Эй! Воровать вздумал?\n\n" +
+                "Он протянул руку.\n\n" +
+                "— Неси сюда монету. И чтоб глаза мои тебя больше не видели.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(Effect.Transition("c1_guard_angry"))
+            )
+        )
+    )
+
+    private val pavementFailureScene = Scene(
+        id = "c1_pavement_failure",
+        locationId = "lower_city_alley",
+        consequenceTitle = "ОСМОТРЕТЬ МОСТОВУЮ: ПРОВАЛ",
+        text = "Вы пристально всматриваетесь в серую мостовую. Она холодна, как и весь этот " +
+                "город. Влажный камень отдаёт сыростью, а холод пробегает по спине.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(Effect.Transition("c1_crime_scene"))
+            )
+        )
+    )
+
+    private val pavementSuccessScene = Scene(
+        id = "c1_pavement_success",
+        locationId = "lower_city_alley",
+        consequenceTitle = "ОСМОТРЕТЬ МОСТОВУЮ: УСПЕХ",
+        text = "Вы замечаете за камнем у мостовой тусклый блеск.\n\n" +
+                "Монета.\n\n" +
+                "Не оставлять же её здесь.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(
+                    Effect.SetFlag("pavement_resolved", true),
+                    Effect.ChangeResource("gold", 1, "Золото", min = 0),
+                    Effect.Transition("c1_crime_scene")
+                )
+            )
+        )
+    )
+
+    private val pavementCritSuccessScene = Scene(
+        id = "c1_pavement_crit_success",
+        locationId = "lower_city_alley",
+        consequenceTitle = "ОСМОТРЕТЬ МОСТОВУЮ: КРИТИЧЕСКИЙ УСПЕХ",
+        speakerName = "Стражник Руперт",
+        text = "Вы замечаете за камнем у мостовой блеск. Это монета. Стоило вам нагнуться, как " +
+                "Руперт заметил находку.\n\n" +
+                "— Ещё одну нашёл? Тут их много было.\n\n" +
+                "Он оглядел переулок и сунул руки за пояс.\n\n" +
+                "— Вот возьми ещё эти две и отнеси в канцелярию. Мне с поста уходить нельзя.\n\n" +
+                "Руперт усмехнулся.\n\n" +
+                "— А ты лицо доверенное. Через тебя и передам.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(
+                    Effect.SetFlag("pavement_resolved", true),
+                    Effect.ChangeResource("gold", 3, "Золото", min = 0),
+                    Effect.Transition("c1_crime_scene")
+                )
+            )
         )
     )
 
@@ -614,20 +1015,118 @@ object Chapter1 {
                 id = "ask_about_ring",
                 text = "Спросить о кольце-печатке",
                 check = Check(StatType.INTELLECT, SkillType.ELOQUENCE, 16),
-                onCriticalFailure = listOf(
+                consequences = mapOf(
+                    CheckOutcome.CRITICAL_SUCCESS to "c1_ask_ring_crit_success",
+                    CheckOutcome.SUCCESS to "c1_ask_ring_success",
+                    CheckOutcome.FAILURE to "c1_ask_ring_failure",
+                    CheckOutcome.CRITICAL_FAILURE to "c1_ask_ring_crit_failure"
+                )
+            )
+        )
+    )
+
+    // ---------- Consequence-сцены: "Спросить о кольце-печатке" ----------
+
+    private val askRingCritFailureScene = Scene(
+        id = "c1_ask_ring_crit_failure",
+        locationId = "lower_city_alley",
+        consequenceTitle = "СПРОСИТЬ О КОЛЬЦЕ-ПЕЧАТКЕ: КРИТИЧЕСКИЙ ПРОВАЛ",
+        speakerName = "Стражник Руперт",
+        text = "Вы пытаетесь рассмотреть кольцо, поворачивая его в руках, и не замечаете, что за " +
+                "спиной уже стоит Руперт.\n\n" +
+                "— Ты где это нашёл?\n\n" +
+                "Он резко вырывает кольцо из ваших пальцев.\n\n" +
+                "— Хотел себе в карман сунуть?\n\n" +
+                "Стражник презрительно усмехается.\n\n" +
+                "— Я, думаешь, для чего здесь стою? Чтобы такие, прикрывающиеся благими делами, " +
+                "мародёры не таскались по месту убийства?\n\n" +
+                "Он сжал кольцо в кулаке.\n\n" +
+                "— С этим я сам разберусь.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(
                     Effect.RemoveItem("signet_ring"),
-                    Effect.AddInformation("ring_taken_note", "Руперт забрал кольцо", "Стражник забрал у вас кольцо, заподозрив в мародёрстве, и заявил, что разберётся с находкой сам.", "Дело", InformationType.NOTE),
+                    Effect.AddInformation(
+                        "ring_taken_note", "Руперт забрал кольцо",
+                        "Стражник забрал у вас кольцо, заподозрив в мародёрстве, и заявил, что " +
+                                "разберётся с находкой сам.",
+                        "Дело", InformationType.NOTE
+                    ),
                     Effect.Transition("c1_last_guard_talk")
-                ),
-                onFailure = listOf(Effect.Transition("c1_chancery_ring", "main_square")),
-                onSuccess = listOf(
-                    Effect.AddInformation("house_385", "Дом № 385", "Адрес дома покойного Гремма: дом № 385, Главная улица.", "Дело", InformationType.GOAL, linkIfPresent = "ring_numbers"),
-                    Effect.Transition("c1_alley_entrance")
-                ),
-                onCriticalSuccess = listOf(
-                    Effect.AddInformation("house_385", "Дом № 385", "Адрес дома покойного Гремма: дом № 385, Главная улица.", "Дело", InformationType.GOAL, linkIfPresent = "ring_numbers"),
-                    Effect.AddItem("house_385_key", "Ключ от дома № 385", "Ключ, который Руперт, судя по всему, стащил из карманов покойного.", 1),
-                    Effect.Transition("c1_alley_entrance")
+                )
+            )
+        )
+    )
+
+    private val askRingFailureScene = Scene(
+        id = "c1_ask_ring_failure",
+        locationId = "lower_city_alley",
+        consequenceTitle = "СПРОСИТЬ О КОЛЬЦЕ-ПЕЧАТКЕ: ПРОВАЛ",
+        text = "Вы впервые видите такой замысловатый узор на кольце.\n\n" +
+                "На тёмном металле тонкой работы переплетаются линии герба. Несмотря на грязь и " +
+                "потёртости, мастерство заметно даже спустя годы.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(Effect.Transition("c1_guard_ring_reaction"))
+            )
+        )
+    )
+
+    private val askRingSuccessScene = Scene(
+        id = "c1_ask_ring_success",
+        locationId = "lower_city_alley",
+        consequenceTitle = "СПРОСИТЬ О КОЛЬЦЕ-ПЕЧАТКЕ: УСПЕХ",
+        text = "Вам уже знаком этот герб, вы видели его в бумагах — это герб покойного Гремма.\n\n" +
+                "Должно быть, кольцо слетело с его пальца, с того самого, которого стражники так и " +
+                "не нашли.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(
+                    Effect.AddInformation(
+                        "ring_gremm_crest", "Кольцо с гербом убитого",
+                        "Герб на кольце знаком по документам — это герб покойного Гремма. Должно " +
+                                "быть, кольцо слетело с его пальца — того самого, которого стражники " +
+                                "так и не нашли.",
+                        "Дело", InformationType.NOTE
+                    ),
+                    Effect.Transition("c1_guard_ring_reaction")
+                )
+            )
+        )
+    )
+
+    private val askRingCritSuccessScene = Scene(
+        id = "c1_ask_ring_crit_success",
+        locationId = "lower_city_alley",
+        consequenceTitle = "СПРОСИТЬ О КОЛЬЦЕ-ПЕЧАТКЕ: КРИТИЧЕСКИЙ УСПЕХ",
+        text = "Вам уже знаком этот герб, вы видели его в бумагах — это герб покойного Гремма.\n\n" +
+                "Должно быть, кольцо слетело с его пальца, с того самого, которого стражники так и " +
+                "не нашли.\n\n" +
+                "На внутренней стороне печатки виднеются цифры: 3, 8 и 5.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(
+                    Effect.AddInformation(
+                        "ring_gremm_crest", "Кольцо с гербом убитого",
+                        "Герб на кольце знаком по документам — это герб покойного Гремма. Должно " +
+                                "быть, кольцо слетело с его пальца — того самого, которого стражники " +
+                                "так и не нашли.",
+                        "Дело", InformationType.NOTE
+                    ),
+                    Effect.AddInformation(
+                        "ring_numbers", "Странные цифры на кольце",
+                        "На внутренней стороне печатки виднеются цифры: 3, 8 и 5.",
+                        "Дело", InformationType.NOTE
+                    ),
+                    Effect.Transition("c1_guard_ring_reaction")
                 )
             )
         )
@@ -723,6 +1222,124 @@ object Chapter1 {
         )
     )
 
+    // ---------- Consequence-сцены: "Рассмотреть кольцо-печатку" ----------
+
+    private val examineRingCritFailureScene = Scene(
+        id = "c1_examine_ring_crit_failure",
+        locationId = "lower_city_alley",
+        consequenceTitle = "РАССМОТРЕТЬ КОЛЬЦО-ПЕЧАТКУ: КРИТИЧЕСКИЙ ПРОВАЛ",
+        speakerName = "Стражник Руперт",
+        text = "Руперт уверенно подбросил кольцо вверх и поймал его на ладонь.\n\n" +
+                "— Это улика. Достойная находка достойного солдата.\n\n" +
+                "Он спрятал кольцо в кулак.\n\n" +
+                "— Я её нашёл, я и отчитаюсь перед начальством.\n\n" +
+                "Руперт указал на выход из переулка.\n\n" +
+                "— А ты пошёл вон.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(
+                    Effect.RemoveItem("signet_ring"),
+                    Effect.AddInformation(
+                        "ring_confiscated_note", "Руперт присвоил кольцо",
+                        "Стражник присвоил кольцо, заявив, что разберётся с находкой сам.",
+                        "Дело", InformationType.NOTE
+                    ),
+                    Effect.Transition("c1_last_guard_talk")
+                )
+            )
+        )
+    )
+
+    private val examineRingFailureScene = Scene(
+        id = "c1_examine_ring_failure",
+        locationId = "lower_city_alley",
+        consequenceTitle = "РАССМОТРЕТЬ КОЛЬЦО-ПЕЧАТКУ: ПРОВАЛ",
+        speakerName = "Стражник Руперт",
+        text = "— Впервые такое вижу, — сказал Руперт.\n\n" +
+                "Он прищурился, разглядывая кольцо.\n\n" +
+                "— Может, кто обронил. Хотя кто станет ронять золотой перстень в Нижнем городе?\n\n" +
+                "Стражник оскалился, обнажив гнилые зубы.\n\n" +
+                "— Отнеси его в канцелярию. Может, местные лизоблюды мэра тебе помогут.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(Effect.Transition("c1_chancery_ring", "main_square"))
+            )
+        )
+    )
+
+    private val examineRingSuccessScene = Scene(
+        id = "c1_examine_ring_success",
+        locationId = "lower_city_alley",
+        consequenceTitle = "РАССМОТРЕТЬ КОЛЬЦО-ПЕЧАТКУ: УСПЕХ",
+        speakerName = "Стражник Руперт",
+        text = "Руперт ещё раз взглянул на кольцо.\n\n" +
+                "— Так это же перстень Гремма.\n\n" +
+                "На его лице появилось беспокойство.\n\n" +
+                "— Странно, его ведь вроде схоронили вместе с ним ещё семь лет назад.\n\n" +
+                "Он потупил взгляд.\n\n" +
+                "— Точно чертовщина.\n\n" +
+                "Руперт вернул кольцо.\n\n" +
+                "— Я бы на твоём месте держался подальше и от него, и от дома его хозяина. Но если " +
+                "всё же захочешь туда заглянуть — пеняй на себя.\n\n" +
+                "Он махнул рукой.\n\n" +
+                "— Адрес тебе скажу, так и быть. Но больше ничего не знаю. Всё, иди.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(
+                    Effect.AddInformation(
+                        "house_385", "Дом № 385",
+                        "Адрес дома покойного Гремма: дом № 385, Главная улица.",
+                        "Дело", InformationType.GOAL, linkIfPresent = "ring_numbers"
+                    ),
+                    Effect.Transition("c1_alley_entrance")
+                )
+            )
+        )
+    )
+
+    private val examineRingCritSuccessScene = Scene(
+        id = "c1_examine_ring_crit_success",
+        locationId = "lower_city_alley",
+        consequenceTitle = "РАССМОТРЕТЬ КОЛЬЦО-ПЕЧАТКУ: КРИТИЧЕСКИЙ УСПЕХ",
+        speakerName = "Стражник Руперт",
+        text = "— Так это же перстень Гремма.\n\n" +
+                "Руперт несколько секунд смотрел на него, затем усмехнулся.\n\n" +
+                "— Странно. Его ведь похоронили вместе с Эдвардом семь лет назад.\n\n" +
+                "Он покачал головой.\n\n" +
+                "— Точно чертовщина.\n\n" +
+                "Руперт достал из кармана ключ и покрутил его перед вами.\n\n" +
+                "— А вот это тебе, должно быть, пригодится. Ключ от его дома. Лежал у него в кармане.\n\n" +
+                "Он отдал ключ и довольно улыбнулся.\n\n" +
+                "— Не спрашивай, откуда он у меня. Честные стражники по карманам мёртвых не лазят.\n\n" +
+                "Он выдержал паузу.\n\n" +
+                "— Адрес, наверное, у тебя в бумагах уже размылся. Дом номер триста восемьдесят " +
+                "пять, Главная улица.",
+        actions = listOf(
+            Action(
+                id = "continue",
+                text = "Продолжить",
+                effects = listOf(
+                    Effect.AddInformation(
+                        "house_385", "Дом № 385",
+                        "Адрес дома покойного Гремма: дом № 385, Главная улица.",
+                        "Дело", InformationType.GOAL, linkIfPresent = "ring_numbers"
+                    ),
+                    Effect.AddItem(
+                        "house_385_key", "Ключ от дома № 385",
+                        "Ключ, который Руперт, судя по всему, стащил из карманов покойного.", 1
+                    ),
+                    Effect.Transition("c1_alley_entrance")
+                )
+            )
+        )
+    )
+
     // ---------- Осмотр предметов из инвентаря ----------
 
     val itemExamineActions: Map<String, Action> = mapOf(
@@ -747,39 +1364,11 @@ object Chapter1 {
             id = "examine_ring",
             text = "Рассмотреть кольцо-печатку",
             check = Check(StatType.INTELLECT, SkillType.KNOWLEDGE, 18),
-            onCriticalFailure = listOf(
-                Effect.RemoveItem("signet_ring"),
-                Effect.AddInformation(
-                    "ring_taken_by_guard", "Руперт заметил кольцо",
-                    "Пока вы разглядывали находку, за спиной оказался Руперт — он вырвал кольцо из " +
-                            "рук и заявил, что разберётся с ним сам.",
-                    "Дело", InformationType.NOTE
-                ),
-                Effect.Transition("c1_last_guard_talk")
-            ),
-            onFailure = listOf(Effect.Transition("c1_guard_ring_reaction")),
-            onSuccess = listOf(
-                Effect.AddInformation(
-                    "ring_gremm_crest", "Кольцо с гербом убитого",
-                    "Герб на кольце знаком по документам — это герб покойного Гремма. Должно быть, " +
-                            "кольцо слетело с его пальца — того самого, которого стражники так и не нашли.",
-                    "Дело", InformationType.NOTE
-                ),
-                Effect.Transition("c1_guard_ring_reaction")
-            ),
-            onCriticalSuccess = listOf(
-                Effect.AddInformation(
-                    "ring_gremm_crest", "Кольцо с гербом убитого",
-                    "Герб на кольце знаком по документам — это герб покойного Гремма. Должно быть, " +
-                            "кольцо слетело с его пальца — того самого, которого стражники так и не нашли.",
-                    "Дело", InformationType.NOTE
-                ),
-                Effect.AddInformation(
-                    "ring_numbers", "Странные цифры на кольце",
-                    "На внутренней стороне печатки виднеются цифры: 3, 8 и 5.",
-                    "Дело", InformationType.NOTE
-                ),
-                Effect.Transition("c1_guard_ring_reaction")
+            consequences = mapOf(
+                CheckOutcome.CRITICAL_SUCCESS to "c1_examine_ring_crit_success",
+                CheckOutcome.SUCCESS to "c1_examine_ring_success",
+                CheckOutcome.FAILURE to "c1_examine_ring_failure",
+                CheckOutcome.CRITICAL_FAILURE to "c1_examine_ring_crit_failure"
             )
         )
     )
@@ -789,7 +1378,27 @@ object Chapter1 {
     val scenes: List<Scene> = listOf(
         alleyEntrance, guardDialogue, guardRecognized, guardRecognizedAnnoyed,
         guardIncident, guardDocuments, guardSnide, guardEvidence, guardStrangeness,
-        guardStrangenessBribeOffer, guardFinger, guardAngry, guardRats, crimeScene,
-        guardRingReaction, lastGuardTalk, chanceryRing, chanceryRingResult, house385
+        guardFinger, guardAngry, guardRats, crimeScene,
+        guardRingReaction, lastGuardTalk, chanceryRing, chanceryRingResult, house385,
+        examineGuardCritSuccessScene, examineGuardSuccessScene,
+        examineGuardFailureScene, examineGuardCritFailureScene,
+        // Consequence-сцены: "Может, ещё что-то?"
+        askMoreCritFailureScene, askMoreFailureScene,
+        askMoreSuccessScene, askMoreCritSuccessScene,
+        // Consequence-сцены: "Ты чего такой нервный?"
+        nervousCritFailureScene, nervousFailureScene,
+        nervousSuccessScene, nervousCritSuccessScene,
+        // Consequence-сцены: "Осмотреть плющ у стены"
+        ivyCritFailureScene, ivyFailureScene,
+        ivySuccessScene, ivyCritSuccessScene,
+        // Consequence-сцены: "Осмотреть мостовую"
+        pavementCritFailureScene, pavementFailureScene,
+        pavementSuccessScene, pavementCritSuccessScene,
+        // Consequence-сцены: "Спросить о кольце-печатке"
+        askRingCritFailureScene, askRingFailureScene,
+        askRingSuccessScene, askRingCritSuccessScene,
+        // Consequence-сцены: "Рассмотреть кольцо-печатку"
+        examineRingCritFailureScene, examineRingFailureScene,
+        examineRingSuccessScene, examineRingCritSuccessScene
     )
 }
