@@ -16,6 +16,7 @@ object Chapter1 {
     private val alleyEntrance = Scene(
         id = "c1_alley_entrance",
         locationId = "lower_city_alley",
+        image = "scene_c1_alley_entrance.png",
         partTitle = PartTitle(
             chapterImage = "chapter_title.png",
             partImage = "part_title_case1.png"
@@ -61,6 +62,7 @@ object Chapter1 {
     private val guardDialogue = Scene(
         id = "c1_guard_dialogue",
         locationId = "lower_city_alley",
+        image = "scene_c1_guard_dialogue.png",
         speakerName = "Стражник Руперт",
         text = "Стражник заметил вас не сразу. Он стоял, прислонившись к стене, и лениво ковырял " +
                 "носком сапога грязь между камнями. Заметив приближение, недовольно фыркнул и шагнул " +
@@ -80,6 +82,7 @@ object Chapter1 {
     private val guardRecognized = Scene(
         id = "c1_guard_recognized",
         locationId = "lower_city_alley",
+        image = "scene_c1_guard_recognized.png",
         speakerName = "Стражник Руперт",
         text = "Когда вы показали печать Риверстоуна на поручении, полученном в канцелярии, " +
                 "выражение его лица немного изменилось. Улыбки не появилось, но прежняя открытая " +
@@ -128,6 +131,7 @@ object Chapter1 {
     private val guardRecognizedAnnoyed = Scene(
         id = "c1_guard_recognized_annoyed",
         locationId = "lower_city_alley",
+        image = "scene_c1_guard_recognized_annoyed.png",
         speakerName = "Стражник Руперт",
         text = "Стражник скрестил руки на груди и посмотрел на вас с откровенным раздражением.\n\n" +
                 "Казалось, присутствие человека с поручением из канцелярии было для него не приказом, " +
@@ -184,6 +188,7 @@ object Chapter1 {
     private val examineGuardCritSuccessScene = Scene(
         id = "c1_examine_guard_crit_success",
         locationId = "lower_city_alley",
+        image = "scene_c1_examine_guard_crit_success.png",
         consequenceTitle = "РАССМОТРЕТЬ СТРАЖНИКА: КРИТИЧЕСКИЙ УСПЕХ",
         text = "Вы замечаете, что под сапогом Руперта лежит монета. Должно быть, одна из тех, " +
                 "что были разбросаны после убийства.\n\n" +
@@ -212,6 +217,7 @@ object Chapter1 {
     private val examineGuardSuccessScene = Scene(
         id = "c1_examine_guard_success",
         locationId = "lower_city_alley",
+        image = "scene_c1_examine_guard_success.png",
         consequenceTitle = "РАССМОТРЕТЬ СТРАЖНИКА: УСПЕХ",
         text = "Вы подмечаете нервозность Руперта, и для стражника это выглядит странно. Он часто " +
                 "оглядывается, внимательно смотрит в тёмные углы переулка, прислушивается к каждому " +
@@ -237,6 +243,7 @@ object Chapter1 {
     private val examineGuardFailureScene = Scene(
         id = "c1_examine_guard_failure",
         locationId = "lower_city_alley",
+        image = "scene_c1_examine_guard_failure.png",
         consequenceTitle = "РАССМОТРЕТЬ СТРАЖНИКА: ПРОВАЛ",
         text = "Вы ничего особенного не замечаете, что отличало бы этого стражника от других. " +
                 "Разве что он был немного более щетинист, чем принято у городской стражи, да доспехи " +
@@ -253,6 +260,7 @@ object Chapter1 {
     private val examineGuardCritFailureScene = Scene(
         id = "c1_examine_guard_crit_failure",
         locationId = "lower_city_alley",
+        image = "scene_c1_examine_guard_crit_failure.png",
         consequenceTitle = "РАССМОТРЕТЬ СТРАЖНИКА: КРИТИЧЕСКИЙ ПРОВАЛ",
         speakerName = "Стражник Руперт",
         text = "— Чего пялишься? — резко бросил Руперт. — Задумал что-то?\n\n" +
@@ -271,6 +279,7 @@ object Chapter1 {
     private val guardIncident = Scene(
         id = "c1_guard_incident",
         locationId = "lower_city_alley",
+        image = "scene_c1_guard_incident.png",
         speakerName = "Стражник Руперт",
         text = "— Вчера утром нашли тело, — начал Руперт, лениво осматривая вас с головы до ног. " +
                 "— Мужик в дорогом наряде. Лежал вот здесь, у стены. Похоже, ночью кто-то хорошенько " +
@@ -330,6 +339,7 @@ object Chapter1 {
     private val guardDocuments = Scene(
         id = "c1_guard_documents",
         locationId = "lower_city_alley",
+        image = "scene_c1_guard_documents.png",
         speakerName = "Стражник Руперт",
         text = "Стражник достал из-за пояса небольшой свёрток, перехватил его грязными пальцами " +
                 "и лениво покрутил в руке.\n\n" +
@@ -360,6 +370,7 @@ object Chapter1 {
     private val guardSnide = Scene(
         id = "c1_guard_snide",
         locationId = "lower_city_alley",
+        image = "scene_c1_guard_snide.png",
         speakerName = "Стражник Руперт",
         text = "— Неужто горе-сыщик не способен найти адрес в паре бумаг?\n\n" +
                 "Руперт усмехнулся, обнажив неровные зубы.\n\n" +
@@ -384,6 +395,7 @@ object Chapter1 {
     private val guardEvidence = Scene(
         id = "c1_guard_evidence",
         locationId = "lower_city_alley",
+        image = "scene_c1_guard_evidence.png",
         speakerName = "Стражник Руперт",
         text = "— Ничего особенного не нашли, — Руперт пожал плечами. — Следы борьбы, кровь, " +
                 "разбросанные монеты. Остальное уже собрали и унесли.\n\n" +
@@ -406,6 +418,7 @@ object Chapter1 {
     private val guardStrangeness = Scene(
         id = "c1_guard_strangeness",
         locationId = "lower_city_alley",
+        image = "scene_c1_guard_strangeness.png",
         speakerName = "Стражник Руперт",
         text = "— Свидетелей почти нет, — Руперт нахмурился. — Тех, кого нашли поблизости, уже " +
                 "опросили. Никто ничего не видел и не слышал.\n\n" +
@@ -454,6 +467,7 @@ object Chapter1 {
     private val askMoreCritFailureScene = Scene(
         id = "c1_ask_more_crit_failure",
         locationId = "lower_city_alley",
+        image = "scene_c1_ask_more_crit_failure.png",
         consequenceTitle = "МОЖЕТ, ЕЩЁ ЧТО-ТО: КРИТИЧЕСКИЙ ПРОВАЛ",
         speakerName = "Стражник Руперт",
         text = "— Может, тебе ещё рассказать, где я вчера нужду справлял?\n\n" +
@@ -471,6 +485,7 @@ object Chapter1 {
     private val askMoreFailureScene = Scene(
         id = "c1_ask_more_failure",
         locationId = "lower_city_alley",
+        image = "scene_c1_ask_more_failure.png",
         consequenceTitle = "МОЖЕТ, ЕЩЁ ЧТО-ТО: ПРОВАЛ",
         speakerName = "Стражник Руперт",
         text = "Руперт ухмыльнулся.\n\n" +
@@ -499,6 +514,7 @@ object Chapter1 {
     private val askMoreSuccessScene = Scene(
         id = "c1_ask_more_success",
         locationId = "lower_city_alley",
+        image = "scene_c1_ask_more_success.png",
         consequenceTitle = "МОЖЕТ, ЕЩЁ ЧТО-ТО: УСПЕХ",
         speakerName = "Стражник Руперт",
         text = "— Ну, есть ещё что-нибудь? — протянул Руперт, растянув губы в мерзкой улыбке.\n\n" +
@@ -518,6 +534,7 @@ object Chapter1 {
     private val askMoreCritSuccessScene = Scene(
         id = "c1_ask_more_crit_success",
         locationId = "lower_city_alley",
+        image = "scene_c1_ask_more_crit_success.png",
         consequenceTitle = "МОЖЕТ, ЕЩЁ ЧТО-ТО: КРИТИЧЕСКИЙ УСПЕХ",
         speakerName = "Стражник Руперт",
         text = "Стражник задумался, зажмурился и принялся что-то бубнить себе под нос, словно " +
@@ -547,6 +564,7 @@ object Chapter1 {
     private val guardFinger = Scene(
         id = "c1_guard_finger",
         locationId = "lower_city_alley",
+        image = "scene_c1_guard_finger.png",
         speakerName = "Стражник Руперт",
         text = "По архивным записям Эдварду Гремму на момент смерти было шестьдесят пять лет. " +
                 "Найденному вчера мужику на вид было не больше тридцати пяти, но лицом он удивительно " +
@@ -576,6 +594,7 @@ object Chapter1 {
     private val guardAngry = Scene(
         id = "c1_guard_angry",
         locationId = "lower_city_alley",
+        image = "scene_c1_guard_angry.png",
         speakerName = "Стражник Руперт",
         text = "— Чего опять заявился? — рявкнул Руперт.\n\n" +
                 "Он смерил вас тяжёлым взглядом.\n\n" +
@@ -593,6 +612,7 @@ object Chapter1 {
     private val guardRats = Scene(
         id = "c1_guard_rats",
         locationId = "lower_city_alley",
+        image = "scene_c1_guard_rats.png",
         speakerName = "Стражник Руперт",
         text = "Присмотревшись внимательнее, вы замечаете, что держится Руперт совсем не так " +
                 "уверенно, как пытается показать.\n\n" +
@@ -623,6 +643,7 @@ object Chapter1 {
     private val nervousCritFailureScene = Scene(
         id = "c1_nervous_crit_failure",
         locationId = "lower_city_alley",
+        image = "scene_c1_nervous_crit_failure.png",
         consequenceTitle = "ТЫ ЧЕГО ТАКОЙ НЕРВНЫЙ: КРИТИЧЕСКИЙ ПРОВАЛ",
         speakerName = "Стражник Руперт",
         text = "Глаза стражника округляются от удивления и злости.\n\n" +
@@ -641,6 +662,7 @@ object Chapter1 {
     private val nervousFailureScene = Scene(
         id = "c1_nervous_failure",
         locationId = "lower_city_alley",
+        image = "scene_c1_nervous_failure.png",
         consequenceTitle = "ТЫ ЧЕГО ТАКОЙ НЕРВНЫЙ: ПРОВАЛ",
         speakerName = "Стражник Руперт",
         text = "— Тебе показалось, — недовольно фыркает Руперт.\n\n" +
@@ -658,6 +680,7 @@ object Chapter1 {
     private val nervousSuccessScene = Scene(
         id = "c1_nervous_success",
         locationId = "lower_city_alley",
+        image = "scene_c1_nervous_success.png",
         consequenceTitle = "ТЫ ЧЕГО ТАКОЙ НЕРВНЫЙ: УСПЕХ",
         speakerName = "Стражник Руперт",
         text = "— По мне видно? — удивлённо спрашивает Руперт.\n\n" +
@@ -695,6 +718,7 @@ object Chapter1 {
     private val nervousCritSuccessScene = Scene(
         id = "c1_nervous_crit_success",
         locationId = "lower_city_alley",
+        image = "scene_c1_nervous_crit_success.png",
         consequenceTitle = "ТЫ ЧЕГО ТАКОЙ НЕРВНЫЙ: КРИТИЧЕСКИЙ УСПЕХ",
         speakerName = "Стражник Руперт",
         text = "— По мне видно? — удивляется Руперт.\n\n" +
@@ -773,6 +797,7 @@ object Chapter1 {
     private val crimeScene = Scene(
         id = "c1_crime_scene",
         locationId = "lower_city_alley",
+        image = "scene_c1_crime_scene.png",
         text = "Переулок оказался узким и тихим. По обе стороны теснились старые дома с " +
                 "потемневшими от времени стенами и окнами, забитыми гнилыми досками.\n\n" +
                 "Тело нашли у глухой каменной стены, где мостовая почти вплотную подходила к " +
@@ -806,6 +831,7 @@ object Chapter1 {
     private val ivyCritFailureScene = Scene(
         id = "c1_ivy_crit_failure",
         locationId = "lower_city_alley",
+        image = "scene_c1_ivy_crit_failure.png",
         consequenceTitle = "ОСМОТРЕТЬ ПЛЮЩ У СТЕНЫ: КРИТИЧЕСКИЙ ПРОВАЛ",
         text = "Вам кажется, что в зарослях плюща может быть что-то важное.\n\n" +
                 "Вы осторожно раздвигаете побеги и проверяете стену. Вдруг из зелени выскакивает " +
@@ -829,6 +855,7 @@ object Chapter1 {
     private val ivyFailureScene = Scene(
         id = "c1_ivy_failure",
         locationId = "lower_city_alley",
+        image = "scene_c1_ivy_failure.png",
         consequenceTitle = "ОСМОТРЕТЬ ПЛЮЩ У СТЕНЫ: ПРОВАЛ",
         text = "Вам кажется, что в зарослях плюща может быть что-то важное.\n\n" +
                 "Вы почти час проверяете каждый дюйм стены, раздвигаете спутанные побеги, " +
@@ -850,6 +877,7 @@ object Chapter1 {
     private val ivySuccessScene = Scene(
         id = "c1_ivy_success",
         locationId = "lower_city_alley",
+        image = "scene_c1_ivy_success.png",
         consequenceTitle = "ОСМОТРЕТЬ ПЛЮЩ У СТЕНЫ: УСПЕХ",
         text = "Вам кажется, что в зарослях плюща может быть что-то важное.\n\n" +
                 "Аккуратными движениями вы раздвигаете спутанные побеги и наконец замечаете среди " +
@@ -879,6 +907,7 @@ object Chapter1 {
     private val ivyCritSuccessScene = Scene(
         id = "c1_ivy_crit_success",
         locationId = "lower_city_alley",
+        image = "scene_c1_ivy_crit_success.png",
         consequenceTitle = "ОСМОТРЕТЬ ПЛЮЩ У СТЕНЫ: КРИТИЧЕСКИЙ УСПЕХ",
         text = "Вам кажется, что в зарослях плюща может быть что-то важное.\n\n" +
                 "Аккуратными движениями вы проверяете стену и наконец находите кольцо.\n\n" +
@@ -909,6 +938,7 @@ object Chapter1 {
     private val pavementCritFailureScene = Scene(
         id = "c1_pavement_crit_failure",
         locationId = "lower_city_alley",
+        image = "scene_c1_pavement_crit_failure.png",
         consequenceTitle = "ОСМОТРЕТЬ МОСТОВУЮ: КРИТИЧЕСКИЙ ПРОВАЛ",
         speakerName = "Стражник Руперт",
         text = "Вы замечаете за камнем у мостовой тусклый блеск.\n\n" +
@@ -929,6 +959,7 @@ object Chapter1 {
     private val pavementFailureScene = Scene(
         id = "c1_pavement_failure",
         locationId = "lower_city_alley",
+        image = "scene_c1_pavement_failure.png",
         consequenceTitle = "ОСМОТРЕТЬ МОСТОВУЮ: ПРОВАЛ",
         text = "Вы пристально всматриваетесь в серую мостовую. Она холодна, как и весь этот " +
                 "город. Влажный камень отдаёт сыростью, а холод пробегает по спине.",
@@ -944,6 +975,7 @@ object Chapter1 {
     private val pavementSuccessScene = Scene(
         id = "c1_pavement_success",
         locationId = "lower_city_alley",
+        image = "scene_c1_pavement_success.png",
         consequenceTitle = "ОСМОТРЕТЬ МОСТОВУЮ: УСПЕХ",
         text = "Вы замечаете за камнем у мостовой тусклый блеск.\n\n" +
                 "Монета.\n\n" +
@@ -964,6 +996,7 @@ object Chapter1 {
     private val pavementCritSuccessScene = Scene(
         id = "c1_pavement_crit_success",
         locationId = "lower_city_alley",
+        image = "scene_c1_pavement_crit_success.png",
         consequenceTitle = "ОСМОТРЕТЬ МОСТОВУЮ: КРИТИЧЕСКИЙ УСПЕХ",
         speakerName = "Стражник Руперт",
         text = "Вы замечаете за камнем у мостовой блеск. Это монета. Стоило вам нагнуться, как " +
@@ -989,6 +1022,7 @@ object Chapter1 {
     private val guardRingReaction = Scene(
         id = "c1_guard_ring_reaction",
         locationId = "lower_city_alley",
+        image = "scene_c1_guard_ring_reaction.png",
         speakerName = "Стражник Руперт",
         text = "Вы показали стражнику найденное кольцо.\n\n" +
                 "Руперт взял его в ладонь, поднёс к тусклому свету, пробивавшемуся между тесными " +
@@ -1014,6 +1048,7 @@ object Chapter1 {
     private val askRingCritFailureScene = Scene(
         id = "c1_ask_ring_crit_failure",
         locationId = "lower_city_alley",
+        image = "scene_c1_ask_ring_crit_failure.png",
         consequenceTitle = "СПРОСИТЬ О КОЛЬЦЕ-ПЕЧАТКЕ: КРИТИЧЕСКИЙ ПРОВАЛ",
         speakerName = "Стражник Руперт",
         text = "Вы пытаетесь рассмотреть кольцо, поворачивая его в руках, и не замечаете, что за " +
@@ -1047,6 +1082,7 @@ object Chapter1 {
     private val askRingFailureScene = Scene(
         id = "c1_ask_ring_failure",
         locationId = "lower_city_alley",
+        image = "scene_c1_ask_ring_failure.png",
         consequenceTitle = "СПРОСИТЬ О КОЛЬЦЕ-ПЕЧАТКЕ: ПРОВАЛ",
         text = "Вы впервые видите такой замысловатый узор на кольце.\n\n" +
                 "На тёмном металле тонкой работы переплетаются линии герба. Несмотря на грязь и " +
@@ -1063,6 +1099,7 @@ object Chapter1 {
     private val askRingSuccessScene = Scene(
         id = "c1_ask_ring_success",
         locationId = "lower_city_alley",
+        image = "scene_c1_ask_ring_success.png",
         consequenceTitle = "СПРОСИТЬ О КОЛЬЦЕ-ПЕЧАТКЕ: УСПЕХ",
         text = "Вам уже знаком этот герб, вы видели его в бумагах — это герб покойного Гремма.\n\n" +
                 "Должно быть, кольцо слетело с его пальца, с того самого, которого стражники так и " +
@@ -1088,6 +1125,7 @@ object Chapter1 {
     private val askRingCritSuccessScene = Scene(
         id = "c1_ask_ring_crit_success",
         locationId = "lower_city_alley",
+        image = "scene_c1_ask_ring_crit_success.png",
         consequenceTitle = "СПРОСИТЬ О КОЛЬЦЕ-ПЕЧАТКЕ: КРИТИЧЕСКИЙ УСПЕХ",
         text = "Вам уже знаком этот герб, вы видели его в бумагах — это герб покойного Гремма.\n\n" +
                 "Должно быть, кольцо слетело с его пальца, с того самого, которого стражники так и " +
@@ -1119,6 +1157,7 @@ object Chapter1 {
     private val lastGuardTalk = Scene(
         id = "c1_last_guard_talk",
         locationId = "lower_city_alley",
+        image = "scene_c1_last_guard_talk.png",
         speakerName = "Стражник Руперт",
         text = "Руперт рассмеялся, явно наслаждаясь собственным превосходством.\n\n" +
                 "— Мы же люди взрослые. Предлагаю договориться.\n\n" +
@@ -1150,6 +1189,7 @@ object Chapter1 {
     private val chanceryRing = Scene(
         id = "c1_chancery_ring",
         locationId = "main_square",
+        image = "scene_c1_chancery_ring.png",
         text = "С Нижнего города вы направились в городскую канцелярию. Перстень с гербом приняли " +
                 "без особого удивления, но после короткого осмотра служащий признал, что определить " +
                 "его происхождение сразу не сможет.\n\n" +
@@ -1170,6 +1210,7 @@ object Chapter1 {
     private val chanceryRingResult = Scene(
         id = "c1_chancery_ring_result",
         locationId = "main_square",
+        image = "scene_c1_chancery_ring_result.png",
         text = "На следующий день в канцелярии герою сообщили результаты поиска.\n\n" +
                 "Перстень принадлежал Эдварду Гремму. Герб на печатке совпадал с гербом, указанным в " +
                 "старых городских записях. В архиве также нашли его адрес — дом № 385 на Главной " +
@@ -1195,6 +1236,7 @@ object Chapter1 {
     private val house385 = Scene(
         id = "c1_house_385",
         locationId = "main_street",
+        image = "scene_c1_house_385.png",
         text = "Дом № 385 на Главной улице.\n\n" +
                 "[Заглушка — текст этой сцены ещё не прислан. Дальше здесь продолжится расследование.]",
         actions = listOf(
@@ -1205,6 +1247,7 @@ object Chapter1 {
     private val examineRingCritFailureScene = Scene(
         id = "c1_examine_ring_crit_failure",
         locationId = "lower_city_alley",
+        image = "scene_c1_examine_ring_crit_failure.png",
         consequenceTitle = "РАССМОТРЕТЬ КОЛЬЦО-ПЕЧАТКУ: КРИТИЧЕСКИЙ ПРОВАЛ",
         speakerName = "Стражник Руперт",
         text = "Руперт уверенно подбросил кольцо вверх и поймал его на ладонь.\n\n" +
@@ -1233,6 +1276,7 @@ object Chapter1 {
     private val examineRingFailureScene = Scene(
         id = "c1_examine_ring_failure",
         locationId = "lower_city_alley",
+        image = "scene_c1_examine_ring_failure.png",
         consequenceTitle = "РАССМОТРЕТЬ КОЛЬЦО-ПЕЧАТКУ: ПРОВАЛ",
         speakerName = "Стражник Руперт",
         text = "— Впервые такое вижу, — сказал Руперт.\n\n" +
@@ -1252,6 +1296,7 @@ object Chapter1 {
     private val examineRingSuccessScene = Scene(
         id = "c1_examine_ring_success",
         locationId = "lower_city_alley",
+        image = "scene_c1_examine_ring_success.png",
         consequenceTitle = "РАССМОТРЕТЬ КОЛЬЦО-ПЕЧАТКУ: УСПЕХ",
         speakerName = "Стражник Руперт",
         text = "Руперт ещё раз взглянул на кольцо.\n\n" +
@@ -1284,6 +1329,7 @@ object Chapter1 {
     private val examineRingCritSuccessScene = Scene(
         id = "c1_examine_ring_crit_success",
         locationId = "lower_city_alley",
+        image = "scene_c1_examine_ring_crit_success.png",
         consequenceTitle = "РАССМОТРЕТЬ КОЛЬЦО-ПЕЧАТКУ: КРИТИЧЕСКИЙ УСПЕХ",
         speakerName = "Стражник Руперт",
         text = "— Так это же перстень Гремма.\n\n" +

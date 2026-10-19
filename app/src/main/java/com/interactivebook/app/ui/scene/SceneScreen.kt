@@ -444,7 +444,7 @@ fun SceneScreen(
                             .graphicsLayer { alpha = illustrationAlpha.value },
                         contentAlignment = Alignment.Center
                     ) {
-                        IllustrationWithFrame()
+                        IllustrationWithFrame(scene.image)
                     }
                 }
 
@@ -673,24 +673,35 @@ private fun ConsequenceTitle(rawTitle: String) {
 }
 
 @Composable
-private fun IllustrationWithFrame() {
+private fun IllustrationWithFrame(imageFile: String?) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
+        // Подложка / Изображение
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(5.dp)
-                .background(Color(0xFF2B2118)),
+                .background(Color(0xFF2B2118)), // Темный фон, если картинки нет
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = stringResource(R.string.placeholder_illustration),
-                color = Color(0xFFB5A27C),
-                style = MaterialTheme.typography.labelLarge
-            )
+            if (imageFile != null) {
+                AssetImage(
+                    fileName = imageFile,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop // Заполняет всю рамку
+                )
+            } else {
+                Text(
+                    text = stringResource(R.string.placeholder_illustration),
+                    color = Color(0xFFB5A27C),
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
         }
+        // Рамка
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -794,7 +805,7 @@ private fun OrnamentalDivider() {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = sidePadding) // ДОБАВИЛИ ОТСТУПЫ КАК У ТЕКСТА
+                .padding(horizontal = sidePadding)
                 .padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {

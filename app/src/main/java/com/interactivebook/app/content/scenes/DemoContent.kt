@@ -10,12 +10,8 @@ import com.interactivebook.app.core.model.PartTitle
 import com.interactivebook.app.core.model.Scene
 import com.interactivebook.app.core.model.TextVariant
 
-/**
- * "Тайны Риверстоуна" — Книга Первая «Город у реки», Пролог.
- */
 object DemoContent {
 
-    /** Единый текст подтверждения для «Пропустить пролог» — ведет на 16 страницу */
     private fun skipPrologueAction(pageId: String) = Action(
         id = "${pageId}_skip_prologue",
         text = "Пропустить пролог",
@@ -29,11 +25,10 @@ object DemoContent {
         effects = listOf(Effect.Transition("prologue_16", "prologue"))
     )
 
-    // ---------- Пролог: 16 страниц ----------
-
     private val prologue01 = Scene(
         id = "prologue_01",
         locationId = "prologue",
+        image = "scene_prologue_01.png",
         text = "Риверстоун стоял там, где большая река замедляла свой бег перед тем, как уйти на юг.\n\n" +
                 "С севера к городу вели торговые дороги, с запада вел старый тракт. С востока начинались " +
                 "земли, где лес постепенно становился гуще, а поселения реже. Река же была самой надёжной " +
@@ -54,6 +49,7 @@ object DemoContent {
     private val prologue02 = Scene(
         id = "prologue_02",
         locationId = "prologue",
+        image = "scene_prologue_02.png",
         text = "В старых районах улицы были настолько старыми и тесными, что два человека с трудом могли " +
                 "разойтись, не задев друг друга плечами.\n\n" +
                 "Это был не самый большой город королевства, но достаточно большой, чтобы в нём можно было " +
@@ -68,6 +64,7 @@ object DemoContent {
     private val prologue03 = Scene(
         id = "prologue_03",
         locationId = "prologue",
+        image = "scene_prologue_03.png",
         text = "Днём город казался обычным.\n\n" +
                 "На Рыночной площади торговцы перекрикивали друг друга, зазывалы рекламировали дешёвые " +
                 "товары, кузнецы ругались с поставщиками угля, а грузчики у речных ворот таскали ящики до " +
@@ -85,6 +82,7 @@ object DemoContent {
     private val prologue04 = Scene(
         id = "prologue_04",
         locationId = "prologue",
+        image = "scene_prologue_04.png",
         text = "Когда лавки закрывались, а последние посетители покидали трактиры, город не засыпал, а " +
                 "просто менялся.\n\n" +
                 "На улицах зажигались фонари, из таверн доносились песни, на пристани продолжали работать " +
@@ -100,6 +98,7 @@ object DemoContent {
     private val prologue05 = Scene(
         id = "prologue_05",
         locationId = "prologue",
+        image = "scene_prologue_05.png",
         text = "Первые странности начались настолько незаметно, что никто не смог потом назвать точный день.",
         actions = listOf(
             Action(id = "p05_continue", text = "Продолжить", effects = listOf(Effect.Transition("prologue_06"))),
@@ -111,6 +110,7 @@ object DemoContent {
     private val prologue06 = Scene(
         id = "prologue_06",
         locationId = "prologue",
+        image = "scene_prologue_06.png",
         text = "Один из ночных патрулей сообщил, что несколько раз слышал шаги за собой на пустой улице. " +
                 "Когда стражники оборачивались, там никого не было.",
         actions = listOf(
@@ -123,6 +123,7 @@ object DemoContent {
     private val prologue07 = Scene(
         id = "prologue_07",
         locationId = "prologue",
+        image = "scene_prologue_07.png",
         text = "В другой части города женщина пожаловалась, что каждую ночь кто-то трижды стучит в её " +
                 "дверь. Никто не стоял за порогом. Потом это произошло у её соседки. А затем ещё у одного дома.",
         actions = listOf(
@@ -135,6 +136,7 @@ object DemoContent {
     private val prologue08 = Scene(
         id = "prologue_08",
         locationId = "prologue",
+        image = "scene_prologue_08.png",
         text = "В порту один лодочник отказался выходить на реку после заката.\n\n" +
                 "Он утверждал, что видел свет фонаря на воде. Фонарь двигался против течения.\n\n" +
                 "Лодочник получил насмешки от товарищей и неделю спустя снова вышел на реку.\n\n" +
@@ -149,6 +151,7 @@ object DemoContent {
     private val prologue09 = Scene(
         id = "prologue_09",
         locationId = "prologue",
+        image = "scene_prologue_09.png",
         text = "Такие истории появлялись всё чаще. Одни были совершенно безобидными, другие странными. " +
                 "Некоторые заканчивались обычным объяснением, некоторые — нет.",
         actions = listOf(
@@ -161,6 +164,7 @@ object DemoContent {
     private val prologue10 = Scene(
         id = "prologue_10",
         locationId = "prologue",
+        image = "scene_prologue_10.png",
         text = "Горожане начали шептаться. Сначала тихо, потом громче. На рынке обсуждали призраков, в " +
                 "тавернах рассказывали о контрабандистах. Старики вспоминали старые легенды, а священники " +
                 "говорили о дурных знамениях.\n\n" +
@@ -176,6 +180,7 @@ object DemoContent {
     private val prologue11 = Scene(
         id = "prologue_11",
         locationId = "prologue",
+        image = "scene_prologue_11.png",
         text = "Стража всё это время продолжала делать свою работу. Патрули стали чаще, у ворот " +
                 "проверяли документы, на пристани появились дополнительные посты, но странные события " +
                 "происходили вновь и вновь.\n\n" +
@@ -190,6 +195,7 @@ object DemoContent {
     private val prologue12 = Scene(
         id = "prologue_12",
         locationId = "prologue",
+        image = "scene_prologue_12.png",
         text = "И чем больше стража пыталась убедить людей, что причин для паники нет, тем сильнее " +
                 "становилась тревога. Однажды вечером на Рыночной площади кто-то сказал:\n\n" +
                 "— «Если стража ничего не может найти, значит, она просто не хочет искать».\n\n" +
@@ -204,6 +210,7 @@ object DemoContent {
     private val prologue13 = Scene(
         id = "prologue_13",
         locationId = "prologue",
+        image = "scene_prologue_13.png",
         text = "Через несколько дней на доске объявлений у городской ратуши появилось объявление.\n\n" +
                 "Оно было написано аккуратным официальным почерком и скреплено печатью мэрии.\n\n" +
                 "ГОРОДСКАЯ МЭРИЯ РИВЕРСТОУНА\n\n" +
@@ -225,6 +232,7 @@ object DemoContent {
     private val prologue14 = Scene(
         id = "prologue_14",
         locationId = "prologue",
+        image = "scene_prologue_14.png",
         text = "Объявление читали по-разному: одни пожимали плечами, другие усмехались. Кто-то говорил, " +
                 "что городская власть наконец решила признать проблему, кто-то, что бургомистр просто " +
                 "пытается найти виноватого.\n\n" +
@@ -240,6 +248,7 @@ object DemoContent {
     private val prologue15 = Scene(
         id = "prologue_15",
         locationId = "prologue",
+        image = "scene_prologue_15.png",
         text = "Вы, как и многие другие желающие обогатиться за счёт мэрии города, отправились сразу в " +
                 "канцелярию.\n\n" +
                 "В приёмной было тесно и шумно. Искатели удачи толпились у барьера, шуршали бумагами, " +
@@ -258,6 +267,7 @@ object DemoContent {
     private val prologue16 = Scene(
         id = "prologue_16",
         locationId = "prologue",
+        image = "scene_prologue_16.png",
         text = "Канцелярия Риверстоуна было одно из немногих мест в городе, где странные происшествия " +
                 "последних недель превратились в обычную бумажную работу.\n\n" +
                 "Служащий говорил сухо и без выражения, словно зачитывал давно заученный текст. Мэрия " +
@@ -283,8 +293,6 @@ object DemoContent {
 
     val startingScene = prologue01
 
-    // ---------- После создания персонажа ----------
-
     private const val CASE_INTRO_COMMON =
         "Служащий занёс ваше имя в журнал, вручил конверт и, пряча раздражение от вашего визита под " +
                 "лицемерной улыбкой, произнёс: «Надеюсь, вам улыбнётся удача в поиске ответов». Ведомый желанием " +
@@ -296,6 +304,7 @@ object DemoContent {
     private val caseIntro = Scene(
         id = "case_intro",
         locationId = "city_hall",
+        image = "scene_case_intro.png",
         text = CASE_INTRO_COMMON,
         textVariants = listOf(
             TextVariant(
