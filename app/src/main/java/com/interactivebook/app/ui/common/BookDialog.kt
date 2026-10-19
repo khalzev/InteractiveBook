@@ -23,17 +23,10 @@ import androidx.compose.ui.window.Dialog
 
 // Цвета окна — в тон книги.
 private val DialogBackground = Color(0xFF332A1E)   // = surfaceVariant из темы
-private val DialogBorder = Color(0xFF7A2525)       // бордовый
+private val DialogBorder = Color(0xFF1A110A)       // Темно-коричневый, почти черный
 private val DialogText = Color(0xFFE8DBC0)         // кремовый
 private val DialogAccent = Color(0xFFE8C766)       // золотой
 
-/**
- * Единое диалоговое окно в стиле книги.
- *
- * Заменяет Material3 AlertDialog с серой подложкой.
- * Используется для подтверждений действий, «Начать новую игру?»,
- * «Пропустить пролог?» и любых других диалогов в приложении.
- */
 @Composable
 fun BookDialog(
     onDismissRequest: () -> Unit,

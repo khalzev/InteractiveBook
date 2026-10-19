@@ -23,12 +23,6 @@ import com.interactivebook.app.core.settings.RevealSpeed
 import com.interactivebook.app.core.settings.SettingsRepository
 import kotlinx.coroutines.launch
 
-/**
- * GameState хранится в памяти (mutableStateOf) и синхронно отражается в UI, а также
- * автоматически сохраняется на диск через SaveRepository — единственный автосейв (раздел 66),
- * без слотов и ручного сохранения. ViewModel не содержит игровых правил: Conditions/Check/Effects
- * выполняются через ConditionEvaluator / CheckResolver / GameEngine.
- */
 class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     private val engine = GameEngine()
@@ -36,20 +30,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     var gameState by mutableStateOf<GameState?>(null)
         private set
 
-    /** Настройка: скорость появления сцены (INSTANT/FAST/SLOW). По умолчанию SLOW. */
     var revealSpeed by mutableStateOf(RevealSpeed.DEFAULT)
         private set
 
-    /** Настройка: перелистывание страниц. По умолчанию — включено. */
     var pageTurnEnabled by mutableStateOf(true)
         private set
 
-    /**
-     * ID ресурсов, анимация появления которых УЖЕ БЫЛА показана игроку в этой
-     * игровой сессии. При первом появлении ресурса (например, золота в Деле
-     * первом) — проигрывается анимация "0 → N". Повторно не проигрывается.
-     * Сбрасывается при New Game.
-     */
     var resourcesEverSeen by mutableStateOf<Set<String>>(emptySet())
         private set
 
@@ -73,28 +59,12 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // Сцена, которая уже была показана полностью. Нужна, чтобы при возврате из инвентаря/журнала/
-    // настроек сцена не проигрывала анимацию появления заново. Хранится только в памяти.
     private var revealedSceneId: String? = null
-
-    /**
-     * Отложенный переход. Если действие игрока содержит Transition, но мы хотим
-     * сначала показать анимацию получения ресурса/предмета/информации, то Transition
-     * временно НЕ применяется. Здесь запоминается его целевая сцена. Применяется
-     * отдельным вызовом applyPendingTransition() после завершения анимации.
-     * Хранится только в памяти.
-     */
     private var pendingTransitionSceneId: String? = null
     private var pendingTransitionLocationId: String? = null
 
-    /** Есть ли отложенный переход. */
     fun hasPendingTransition(): Boolean = pendingTransitionSceneId != null
 
-    /**
-     * Применяет действие БЕЗ эффекта Transition.
-     * Используется, когда надо сначала показать анимации получения ресурсов, а потом
-     * уже перейти в новую сцену. Если действие содержит Transition — он откладывается.
-     */
     fun performActionWithoutTransition(action: Action) {
         if (action.check != null) return
         val state = gameState ?: return
@@ -102,18 +72,28 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         val transition = action.effects.filterIsInstance<Effect.Transition>().firstOrNull()
         val effectsWithoutTransition = action.effects.filter { it !is Effect.Transition }
 
-        if (transition != null) {
-            pendingTransitionSceneId = transition.sceneId
-            pendingTransitionLocationId = transition.locationId
+        val willAnimate = action.effects.any { effect ->
+            when (effect) {
+                is Effect.AddItem -> state.inventory.none { it.id == effect.itemId }
+                is Effect.AddInformation -> state.information.none { it.id == effect.informationId }
+                is Effect.ChangeResource -> effect.delta != 0
+                else -> false
+            }
         }
 
         val sceneId = state.currentSceneId
-        val withUsed = if (isNavigationAction(action)) state
+        val withUsed = if (action.isNavigation) state
         else markActionUsed(state, sceneId, action.id)
-        updateState(engine.applyEffects(withUsed, effectsWithoutTransition))
+
+        if (transition != null && willAnimate) {
+            pendingTransitionSceneId = transition.sceneId
+            pendingTransitionLocationId = transition.locationId
+            updateState(engine.applyEffects(withUsed, effectsWithoutTransition))
+        } else {
+            updateState(engine.applyEffects(withUsed, action.effects))
+        }
     }
 
-    /** Применяет отложенный переход (если он есть). */
     fun applyPendingTransition() {
         val state = gameState ?: return
         val targetSceneId = pendingTransitionSceneId ?: return
@@ -129,30 +109,29 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    fun isSceneRevealed(sceneId: String): Boolean = revealedSceneId == sceneId
-
-    fun markSceneRevealed(sceneId: String) {
-        revealedSceneId = sceneId
+    // НОВОЕ: Принудительный переход (нужно при отмене создания персонажа)
+    fun goToScene(sceneId: String, locationId: String? = null) {
+        val state = gameState ?: return
+        updateState(
+            state.copy(
+                currentSceneId = sceneId,
+                currentLocationId = locationId ?: state.currentLocationId
+            )
+        )
     }
+
+    fun isSceneRevealed(sceneId: String): Boolean = revealedSceneId == sceneId
+    fun markSceneRevealed(sceneId: String) { revealedSceneId = sceneId }
 
     init {
-        viewModelScope.launch {
-            gameState = SaveRepository.load(getApplication())
-        }
-        viewModelScope.launch {
-            revealSpeed = SettingsRepository.loadRevealSpeed(getApplication())
-        }
-        viewModelScope.launch {
-            pageTurnEnabled = SettingsRepository.loadPageTurnEnabled(getApplication())
-        }
+        viewModelScope.launch { gameState = SaveRepository.load(getApplication()) }
+        viewModelScope.launch { revealSpeed = SettingsRepository.loadRevealSpeed(getApplication()) }
+        viewModelScope.launch { pageTurnEnabled = SettingsRepository.loadPageTurnEnabled(getApplication()) }
     }
 
-    /** Меняет состояние и сразу же сохраняет его — автосейв при каждом изменении (раздел 67). */
     private fun updateState(newState: GameState) {
         gameState = newState
-        viewModelScope.launch {
-            SaveRepository.save(getApplication(), newState)
-        }
+        viewModelScope.launch { SaveRepository.save(getApplication(), newState) }
     }
 
     fun startNewGame() {
@@ -171,27 +150,18 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun hasSavedGame(): Boolean = gameState != null
-
     fun currentScene(): Scene? {
         val state = gameState ?: return null
         return DemoContent.scenes.firstOrNull { it.id == state.currentSceneId }
     }
 
-    /** Текст сцены с учётом textVariants. */
     fun resolveSceneText(scene: Scene): String {
         val state = gameState ?: return scene.text
-        return scene.textVariants.firstOrNull { ConditionEvaluator.isMet(it.condition, state) }?.text
-            ?: scene.text
+        return scene.textVariants.firstOrNull { ConditionEvaluator.isMet(it.condition, state) }?.text ?: scene.text
     }
 
-    /** Действие осмотра предмета (если для него есть examine-контент — см. DemoContent). */
     fun examineAction(item: Item): Action? = DemoContent.itemExamineActions[item.id]
 
-    /**
-     * Действия, доступные при текущем GameState.
-     * Порядок: 1) новые — наверху; 2) непройденные; 3) пройденные — внизу.
-     * Стабильная сортировка — авторский порядок внутри группы сохраняется.
-     */
     fun visibleActions(scene: Scene): List<Action> {
         val state = gameState ?: return emptyList()
         val visible = scene.actions.filter { ConditionEvaluator.isMet(it.condition, state) }
@@ -206,22 +176,15 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /**
-     * ID действий, которые появились ПОСЛЕ прошлого визита в эту сцену.
-     */
     fun newlyAvailableActionIds(scene: Scene): Set<String> {
         val state = gameState ?: return emptySet()
         val visitedBefore = state.seenActionsByScene.containsKey(scene.id)
         if (!visitedBefore) return emptySet()
-        val visibleIds = scene.actions
-            .filter { ConditionEvaluator.isMet(it.condition, state) }
-            .map { it.id }
-            .toSet()
+        val visibleIds = scene.actions.filter { ConditionEvaluator.isMet(it.condition, state) }.map { it.id }.toSet()
         val alreadySeen = state.seenActionsByScene[scene.id] ?: emptySet()
         return visibleIds - alreadySeen
     }
 
-    /** ID действий, которые игрок уже реально нажимал в этой сцене. */
     fun usedActionIds(scene: Scene): Set<String> {
         val state = gameState ?: return emptySet()
         return state.usedActionsByScene[scene.id] ?: emptySet()
@@ -229,10 +192,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
 
     fun markActionsSeen(scene: Scene) {
         val state = gameState ?: return
-        val visibleIds = scene.actions
-            .filter { ConditionEvaluator.isMet(it.condition, state) }
-            .map { it.id }
-            .toSet()
+        val visibleIds = scene.actions.filter { ConditionEvaluator.isMet(it.condition, state) }.map { it.id }.toSet()
         val alreadySeen = state.seenActionsByScene[scene.id]
         if (alreadySeen == null || !alreadySeen.containsAll(visibleIds)) {
             val updated = state.seenActionsByScene + (scene.id to ((alreadySeen ?: emptySet()) + visibleIds))
@@ -243,34 +203,14 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private fun markActionUsed(state: GameState, sceneId: String, actionId: String): GameState {
         val current = state.usedActionsByScene[sceneId] ?: emptySet()
         if (actionId in current) return state
-        return state.copy(
-            usedActionsByScene = state.usedActionsByScene + (sceneId to (current + actionId))
-        )
+        return state.copy(usedActionsByScene = state.usedActionsByScene + (sceneId to (current + actionId)))
     }
 
-    /**
-     * Навигационное действие — это "просто выход в другую сцену".
-     * У него нет проверки, есть Transition, и все остальные эффекты — идемпотентные
-     * (AddInformation/SetFlag). Такие действия НЕ помечаются как "использованные" —
-     * иначе игрок не сможет выйти из сцены при повторном посещении.
-     */
-    private fun isNavigationAction(action: Action): Boolean {
-        if (action.check != null) return false
-        if (action.effects.none { it is Effect.Transition }) return false
-        return action.effects.all { effect ->
-            effect is Effect.Transition ||
-                    effect is Effect.AddInformation ||
-                    effect is Effect.SetFlag
-        }
-    }
-
-    /** Для действий без Check — effects применяются сразу. */
     fun performAction(action: Action) {
         if (action.check != null) return
         val state = gameState ?: return
         val sceneId = state.currentSceneId
-        val withUsed = if (isNavigationAction(action)) state
-        else markActionUsed(state, sceneId, action.id)
+        val withUsed = if (action.isNavigation) state else markActionUsed(state, sceneId, action.id)
         updateState(engine.applyEffects(withUsed, action.effects))
     }
 
@@ -280,7 +220,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         return CheckResolver.resolve(action.text, check, state.character)
     }
 
-    /** Применяет Effects нужной ветки результата после того, как UI показал исход. */
     fun applyCheckOutcome(action: Action, outcome: CheckOutcome) {
         val state = gameState ?: return
         val sceneId = state.currentSceneId
@@ -288,11 +227,6 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         updateState(engine.applyCheckOutcome(action, outcome, withUsed))
     }
 
-    /**
-     * Переводит игрока в consequence-сцену по исходу проверки.
-     * Эффекты самого действия при этом НЕ применяются — они лежат в действии
-     * "Продолжить" внутри consequence-сцены (переехали туда из onSuccess/onFailure).
-     */
     fun applyConsequence(action: Action, outcome: CheckOutcome) {
         val state = gameState ?: return
         val targetSceneId = engine.consequenceSceneIdFor(action, outcome) ?: return
@@ -300,30 +234,25 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
         updateState(withUsed.copy(currentSceneId = targetSceneId))
     }
 
-    fun outcomeEffects(action: Action, outcome: CheckOutcome): List<Effect> =
-        engine.effectsForOutcome(action, outcome)
+    fun outcomeEffects(action: Action, outcome: CheckOutcome): List<Effect> = engine.effectsForOutcome(action, outcome)
 
-    /** Помечает сцену как "титул уже показан". */
     fun markPartTitleShown(sceneId: String) {
         val state = gameState ?: return
         if (sceneId in state.shownPartTitleSceneIds) return
         updateState(state.copy(shownPartTitleSceneIds = state.shownPartTitleSceneIds + sceneId))
     }
 
-    /** Проверяет — показывался ли уже титул этой сцены. */
     fun isPartTitleShown(sceneId: String): Boolean {
         val state = gameState ?: return false
         return sceneId in state.shownPartTitleSceneIds
     }
 
-    /** Сбрасывает флаг "есть непрочитанный предмет" — вызывается при открытии инвентаря. */
     fun markInventorySeen() {
         val state = gameState ?: return
         if (!state.hasUnreadItems) return
         updateState(state.copy(hasUnreadItems = false))
     }
 
-    /** Сбрасывает флаг "есть непрочитанная запись" — вызывается при открытии журнала. */
     fun markJournalSeen() {
         val state = gameState ?: return
         if (!state.hasUnreadJournal) return

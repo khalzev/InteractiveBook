@@ -11,16 +11,7 @@ import com.interactivebook.app.core.model.Scene
 import com.interactivebook.app.core.model.SkillType
 import com.interactivebook.app.core.model.StatType
 
-/**
- * Глава 1: "Человек, которого не было". Локация "Переулок нижнего города" + "Дом № 385" (заглушка).
- *
- * Новый механизм проверок: проверка идёт через DiceRollScreen (Action.consequences),
- * далее consequence-сцена с текстом исхода и действием «Продолжить».
- * Эффекты применяются при нажатии «Продолжить».
- */
 object Chapter1 {
-
-    // ---------- Переулок нижнего города ----------
 
     private val alleyEntrance = Scene(
         id = "c1_alley_entrance",
@@ -128,6 +119,7 @@ object Chapter1 {
             Action(
                 id = "end_talk",
                 text = "Закончить разговор",
+                isNavigation = true,
                 effects = listOf(Effect.Transition("c1_alley_entrance"))
             )
         )
@@ -183,12 +175,11 @@ object Chapter1 {
             Action(
                 id = "end_talk_annoyed",
                 text = "Закончить разговор",
+                isNavigation = true,
                 effects = listOf(Effect.Transition("c1_alley_entrance"))
             )
         )
     )
-
-    // ---------- Consequence-сцены: "Рассмотреть стражника" ----------
 
     private val examineGuardCritSuccessScene = Scene(
         id = "c1_examine_guard_crit_success",
@@ -277,8 +268,6 @@ object Chapter1 {
         )
     )
 
-    // ---------- Темы разговора ----------
-
     private val guardIncident = Scene(
         id = "c1_guard_incident",
         locationId = "lower_city_alley",
@@ -306,6 +295,7 @@ object Chapter1 {
             Action(
                 id = "leave_incident",
                 text = "Спросить о чём-то другом",
+                isNavigation = true,
                 condition = Condition.HasFlag("guard_annoyed", false),
                 effects = listOf(
                     Effect.AddInformation(
@@ -321,6 +311,7 @@ object Chapter1 {
             Action(
                 id = "leave_incident_annoyed",
                 text = "Спросить о чём-то другом",
+                isNavigation = true,
                 condition = Condition.HasFlag("guard_annoyed", true),
                 effects = listOf(
                     Effect.AddInformation(
@@ -360,6 +351,7 @@ object Chapter1 {
             Action(
                 id = "leave_documents",
                 text = "Спросить о чём-то другом",
+                isNavigation = true,
                 effects = listOf(Effect.Transition("c1_guard_recognized"))
             )
         )
@@ -405,6 +397,7 @@ object Chapter1 {
             Action(
                 id = "leave_evidence",
                 text = "Спросить о чём-то другом",
+                isNavigation = true,
                 effects = listOf(Effect.Transition("c1_guard_recognized_annoyed"))
             )
         )
@@ -452,12 +445,11 @@ object Chapter1 {
             Action(
                 id = "leave_strangeness",
                 text = "Спросить о чём-то другом",
+                isNavigation = true,
                 effects = listOf(Effect.Transition("c1_guard_recognized_annoyed"))
             )
         )
     )
-
-    // ---------- Consequence-сцены: "Может, ещё что-то?" ----------
 
     private val askMoreCritFailureScene = Scene(
         id = "c1_ask_more_crit_failure",
@@ -498,6 +490,7 @@ object Chapter1 {
             Action(
                 id = "refuse_bribe",
                 text = "Уйти ни с чем",
+                isNavigation = true,
                 effects = listOf(Effect.Transition("c1_guard_recognized_annoyed"))
             )
         )
@@ -570,6 +563,7 @@ object Chapter1 {
             Action(
                 id = "return_from_finger",
                 text = "Вернуться к разговору",
+                isNavigation = true,
                 effects = listOf(
                     Effect.AddInformation("finger", "Про палец", "У найденного тела не хватает мизинца на правой руке — как и у Гремма.", "Дело", InformationType.NOTE),
                     Effect.AddInformation("age", "Про возраст", "Найденный мужчина выглядит лет на тридцать моложе, чем должен быть Гремм на момент смерти.", "Дело", InformationType.NOTE),
@@ -590,6 +584,7 @@ object Chapter1 {
             Action(
                 id = "leave_angry",
                 text = "Решил, что ты без меня будешь скучать",
+                isNavigation = true,
                 effects = listOf(Effect.SetFlag("guard_annoyed", true), Effect.Transition("c1_guard_recognized_annoyed"))
             )
         )
@@ -624,8 +619,6 @@ object Chapter1 {
             )
         )
     )
-
-    // ---------- Consequence-сцены: "Ты чего такой нервный?" ----------
 
     private val nervousCritFailureScene = Scene(
         id = "c1_nervous_crit_failure",
@@ -741,8 +734,6 @@ object Chapter1 {
         )
     )
 
-    // ---------- Место преступления ----------
-
     private fun ivyExamineAction(exactRetries: Int?, atLeastRetries: Int?, dc: Int): Action {
         val conditions = mutableListOf<Condition>(
             Condition.HasFlag("ivy_resolved", false),
@@ -807,11 +798,10 @@ object Chapter1 {
         ) + ivyActions + ivyDisabledPlaceholder + Action(
             id = "finish_crime_scene",
             text = "Закончить осмотр",
+            isNavigation = true,
             effects = listOf(Effect.Transition("c1_alley_entrance"))
         )
     )
-
-    // ---------- Consequence-сцены: "Осмотреть плющ у стены" ----------
 
     private val ivyCritFailureScene = Scene(
         id = "c1_ivy_crit_failure",
@@ -916,8 +906,6 @@ object Chapter1 {
         )
     )
 
-    // ---------- Consequence-сцены: "Осмотреть мостовую" ----------
-
     private val pavementCritFailureScene = Scene(
         id = "c1_pavement_crit_failure",
         locationId = "lower_city_alley",
@@ -998,8 +986,6 @@ object Chapter1 {
         )
     )
 
-    // ---------- Кольцо ----------
-
     private val guardRingReaction = Scene(
         id = "c1_guard_ring_reaction",
         locationId = "lower_city_alley",
@@ -1024,8 +1010,6 @@ object Chapter1 {
             )
         )
     )
-
-    // ---------- Consequence-сцены: "Спросить о кольце-печатке" ----------
 
     private val askRingCritFailureScene = Scene(
         id = "c1_ask_ring_crit_failure",
@@ -1163,8 +1147,6 @@ object Chapter1 {
         )
     )
 
-    // ---------- Канцелярия ----------
-
     private val chanceryRing = Scene(
         id = "c1_chancery_ring",
         locationId = "main_square",
@@ -1210,8 +1192,6 @@ object Chapter1 {
         )
     )
 
-    // ---------- Дом № 385 (заглушка следующей сцены) ----------
-
     private val house385 = Scene(
         id = "c1_house_385",
         locationId = "main_street",
@@ -1221,8 +1201,6 @@ object Chapter1 {
             Action(id = "examine_house_stub", text = "Осмотреть дом")
         )
     )
-
-    // ---------- Consequence-сцены: "Рассмотреть кольцо-печатку" ----------
 
     private val examineRingCritFailureScene = Scene(
         id = "c1_examine_ring_crit_failure",
@@ -1340,8 +1318,6 @@ object Chapter1 {
         )
     )
 
-    // ---------- Осмотр предметов из инвентаря ----------
-
     val itemExamineActions: Map<String, Action> = mapOf(
         "victim_documents" to Action(
             id = "examine_documents",
@@ -1382,22 +1358,16 @@ object Chapter1 {
         guardRingReaction, lastGuardTalk, chanceryRing, chanceryRingResult, house385,
         examineGuardCritSuccessScene, examineGuardSuccessScene,
         examineGuardFailureScene, examineGuardCritFailureScene,
-        // Consequence-сцены: "Может, ещё что-то?"
         askMoreCritFailureScene, askMoreFailureScene,
         askMoreSuccessScene, askMoreCritSuccessScene,
-        // Consequence-сцены: "Ты чего такой нервный?"
         nervousCritFailureScene, nervousFailureScene,
         nervousSuccessScene, nervousCritSuccessScene,
-        // Consequence-сцены: "Осмотреть плющ у стены"
         ivyCritFailureScene, ivyFailureScene,
         ivySuccessScene, ivyCritSuccessScene,
-        // Consequence-сцены: "Осмотреть мостовую"
         pavementCritFailureScene, pavementFailureScene,
         pavementSuccessScene, pavementCritSuccessScene,
-        // Consequence-сцены: "Спросить о кольце-печатке"
         askRingCritFailureScene, askRingFailureScene,
         askRingSuccessScene, askRingCritSuccessScene,
-        // Consequence-сцены: "Рассмотреть кольцо-печатку"
         examineRingCritFailureScene, examineRingFailureScene,
         examineRingSuccessScene, examineRingCritSuccessScene
     )

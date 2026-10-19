@@ -64,7 +64,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Прозрачные системные бары — и верхний, и нижний.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(
                 lightScrim = AndroidColor.TRANSPARENT,
@@ -205,6 +204,11 @@ private fun InteractiveBookNavHost(
 
             composable(ROUTE_CHARACTER_CREATION) {
                 CharacterCreationScreen(
+                    onBack = {
+                        // Возврат на 16 страницу при отказе
+                        viewModel.goToScene("prologue_16", "prologue")
+                        navController.popBackStack()
+                    },
                     onCharacterReady = { character ->
                         val action = pendingCharacterCreationAction
                         viewModel.setCharacterAndApplyEffects(character, action?.effects ?: emptyList())
@@ -366,7 +370,6 @@ private fun InteractiveBookNavHost(
             }
         }
 
-        // Универсальный оверлей перехода.
         pendingNavigation?.let { action ->
             PageTurnTransition(
                 onFinished = {

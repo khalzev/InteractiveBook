@@ -25,14 +25,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import com.interactivebook.app.ui.common.BookDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -103,7 +103,7 @@ private const val REWARDS_END_PAUSE_MS = 500L
 
 private val InkColor = Color(0xFF3B2A1A)
 private val InkDimColor = Color(0xFF6B5A44)
-private val BurgundyColor = Color(0xFF7A2525)
+private val DarkBorderColor = Color(0xFF1A110A) // Темно-коричневый, почти черный
 private val GoldTextColor = Color(0xFFE8C766)
 private val SuccessColor = Color(0xFF4F7A38)
 private val FailureColor = Color(0xFF8B2020)
@@ -112,26 +112,11 @@ private val ResourcePlateWidth = 113.dp
 private val ResourcePlateHeight = 57.dp
 private val ResourcePlateNumberSize = 22.sp
 
-// Ручка №1 — двигает ВСЮ группу (плашка + закладки).
 private val TopGroupPadding = 85.dp
-
-// Ручка №2 — двигает ТОЛЬКО закладки относительно плашки.
 private val BookmarksOffsetY = (-43).dp
-
-// Ручка №3 — горизонтальный сдвиг ТОЛЬКО плашки золота.
 private val PlateOffsetX = (-4).dp
 
-// Отступ блока иллюстрации и текста — по 5% с каждой стороны.
 private const val SIDE_PADDING_FRACTION = 0.05f
-
-// Размер иконок в подсказках рядом с действиями.
-private val HintIconSize = 16.dp
-private val HintFontSize = 13.sp
-
-// Соответствие resourceId → имя файла иконки в assets/ui/.
-private val ResourceIconMap: Map<String, String> = mapOf(
-    "gold" to "coin.png"
-)
 
 private enum class RevealStage { ILLUSTRATION, TEXT, ACTIONS, DONE }
 
@@ -237,7 +222,6 @@ fun SceneScreen(
     var pendingMode by remember { mutableStateOf(GoldAnimMode.NONE) }
     var rewardsEndedAt by remember { mutableStateOf<Long?>(null) }
 
-    // Пока летят награды — весь ввод заблокирован.
     val inputBlocked = rewards.isNotEmpty()
 
     fun outsidePoint(): Offset =
@@ -603,17 +587,23 @@ fun SceneScreen(
 
     pendingConfirmation?.let { action ->
         val confirmation = action.confirmation ?: return@let
-        BookDialog(
+        AlertDialog(
             onDismissRequest = { pendingConfirmation = null },
-            title = confirmation.title,
-            message = confirmation.message,
-            confirmLabel = confirmation.confirmLabel,
-            onConfirm = {
-                pendingConfirmation = null
-                dispatch(action)
+            title = { Text(confirmation.title) },
+            text = { Text(confirmation.message) },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingConfirmation = null
+                    dispatch(action)
+                }) {
+                    Text(confirmation.confirmLabel)
+                }
             },
-            dismissLabel = confirmation.cancelLabel,
-            onDismiss = { pendingConfirmation = null }
+            dismissButton = {
+                TextButton(onClick = { pendingConfirmation = null }) {
+                    Text(confirmation.cancelLabel)
+                }
+            }
         )
     }
 }
@@ -706,8 +696,8 @@ private fun IllustrationWithFrame() {
                 .fillMaxSize()
                 .padding(2.dp)
                 .border(
-                    width = 2.5.dp,
-                    color = BurgundyColor.copy(alpha = 0.85f),
+                    width = 5.dp,
+                    color = DarkBorderColor.copy(alpha = 0.85f),
                     shape = RoundedCornerShape(2.dp)
                 )
         )
@@ -796,30 +786,37 @@ private fun TextArea(
 
 @Composable
 private fun OrnamentalDivider() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
+        val sidePadding = maxWidth * SIDE_PADDING_FRACTION
+        Row(
             modifier = Modifier
-                .weight(1f)
-                .height(2.5.dp)
-                .background(BurgundyColor.copy(alpha = 0.85f))
-        )
-        Text(
-            text = "◆",
-            color = BurgundyColor,
-            fontSize = 22.sp,
-            modifier = Modifier.padding(horizontal = 10.dp)
-        )
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(2.5.dp)
-                .background(BurgundyColor.copy(alpha = 0.85f))
-        )
+                .fillMaxWidth()
+                .padding(horizontal = sidePadding) // ДОБАВИЛИ ОТСТУПЫ КАК У ТЕКСТА
+                .padding(vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(5.dp)
+                    .background(DarkBorderColor.copy(alpha = 0.85f))
+            )
+            Text(
+                text = "◆",
+                color = DarkBorderColor,
+                fontSize = 22.sp,
+                modifier = Modifier.padding(horizontal = 10.dp)
+            )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(5.dp)
+                    .background(DarkBorderColor.copy(alpha = 0.85f))
+            )
+        }
     }
 }
 
@@ -922,7 +919,7 @@ private fun ActionRow(
         ) {
             Text(
                 text = if (isUsed) "✓" else "◆",
-                color = if (isUsed) BurgundyColor.copy(alpha = 0.5f) else BurgundyColor,
+                color = if (isUsed) DarkBorderColor.copy(alpha = 0.5f) else DarkBorderColor,
                 fontSize = 18.sp,
                 modifier = Modifier
                     .padding(end = 10.dp)
@@ -937,10 +934,6 @@ private fun ActionRow(
                 fontWeight = if (isNew) FontWeight.SemiBold else FontWeight.Normal,
                 modifier = Modifier.weight(1f, fill = false)
             )
-
-            if (!contentDisabled) {
-                ActionHints(action = action)
-            }
         }
 
         if (contentDisabled) {
@@ -952,68 +945,6 @@ private fun ActionRow(
             )
         }
     }
-}
-
-/**
- * Подсказки рядом с названием действия:
- *  - изменение ресурсов: «(−2 [coin])» / «(+1 [coin])»
- *  - проверка:           «([dice] ≥ 17)»
- */
-@Composable
-private fun ActionHints(action: Action) {
-    if (action.hideCostHint) return
-
-    val resourceChanges = action.effects
-        .filterIsInstance<Effect.ChangeResource>()
-        .filter { it.delta != 0 }
-    val check = action.check
-
-    if (resourceChanges.isEmpty() && check == null) return
-
-    Row(
-        modifier = Modifier.padding(start = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Хинт проверки: ([кубик] ≥ DC)
-        if (check != null) {
-            HintText("(")
-            AssetImage(
-                fileName = "dice.png",
-                contentDescription = null,
-                modifier = Modifier.size(HintIconSize)
-            )
-            HintText(" ≥ ${check.difficulty})")
-        }
-
-        // Хинты ресурсов: (−2 [coin]) или (+1 [coin])
-        resourceChanges.forEach { effect ->
-            val sign = if (effect.delta > 0) "+" else "−"
-            val absDelta = abs(effect.delta)
-            Spacer(Modifier.width(4.dp))
-            HintText("(")
-            HintText("$sign$absDelta ")
-            val iconFile = ResourceIconMap[effect.resourceId]
-            if (iconFile != null) {
-                AssetImage(
-                    fileName = iconFile,
-                    contentDescription = null,
-                    modifier = Modifier.size(HintIconSize)
-                )
-            } else {
-                HintText(effect.name.ifBlank { effect.resourceId })
-            }
-            HintText(")")
-        }
-    }
-}
-
-@Composable
-private fun HintText(text: String) {
-    Text(
-        text = text,
-        color = InkDimColor,
-        fontSize = HintFontSize
-    )
 }
 
 @Composable
